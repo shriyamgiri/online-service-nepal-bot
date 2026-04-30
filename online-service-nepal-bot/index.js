@@ -6,13 +6,13 @@ const app = express();
 app.use(bodyParser.json());
 
 // ==============================
-// 🔧 YOUR SETTINGS — FILL THESE
+// 🔧 YOUR SETTINGS
 // ==============================
-const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD'; // From Facebook Developer App
-const VERIFY_TOKEN = 'onlineservicenepal123';        // You can change this
+const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD'; // Paste your token here
+const VERIFY_TOKEN = 'onlineservicenepal123';
 
 // ==============================
-// 💾 User State (tracks each user's step)
+// 💾 User State
 // ==============================
 const userState = {};
 
@@ -56,249 +56,266 @@ app.post('/webhook', (req, res) => {
 function handleMessage(senderId, message) {
   const text = (message.text || '').toLowerCase().trim();
 
-  // If waiting for mobile number input
+  // Waiting for mobile number
   if (userState[senderId] && userState[senderId].waitingForPhone) {
     const operator = userState[senderId].operator;
     delete userState[senderId];
     return sendText(senderId,
       `✅ Thank you!\n\n` +
       `📶 Operator: ${operator}\n` +
-      `📱 Mobile: ${message.text}\n\n` +
+      `📱 Mobile Number: ${message.text}\n\n` +
       `Our team will contact you shortly! 🙏\n\n` +
-      `— Online Service Nepal`
+      `— Online Service Nepal\n\n` +
+      `Reply MENU to go back to main menu.`
     );
   }
 
-  // Greetings trigger main menu
-  if (['hi','hello','namaste','hey','start','menu'].includes(text)) {
-    sendMainMenu(senderId);
-  } else {
-    sendMainMenu(senderId);
+  // Waiting for Google amount selection
+  if (userState[senderId] && userState[senderId].waitingForGoogle) {
+    const googlePrices = {
+      '1': 'Trial Pack - INR 10 @ NRs.25',
+      '2': '50 INR @ NRs.95',
+      '3': '100 INR @ NRs.185',
+      '4': '150 INR @ NRs.275',
+      '5': '200 INR @ NRs.365',
+      '6': '250 INR @ NRs.455',
+      '7': '300 INR @ NRs.545',
+      '8': '500 INR @ NRs.885',
+      '9': '1000 INR @ NRs.1720'
+    };
+    if (text === '0') {
+      delete userState[senderId];
+      return sendMainMenu(senderId);
+    }
+    const selected = googlePrices[text];
+    if (selected) {
+      delete userState[senderId];
+      return sendText(senderId,
+        `🎮 Google INR Redeem Code\n` +
+        `✅ Selected: ${selected}\n\n` +
+        `⚠️ Note: Requires India based Google Play account.\n\n` +
+        `💳 Payment Details:\n` +
+        `✅ eSewa\n` +
+        `✅ Khalti\n` +
+        `✅ Bank Deposit\n\n` +
+        `Please send payment & share screenshot.\n` +
+        `Our team will verify and send your code shortly! 🙏\n\n` +
+        `— Online Service Nepal\n\n` +
+        `Reply MENU to go back to main menu.`
+      );
+    }
+    return sendGoogleMenuText(senderId);
   }
+
+  // Waiting for Apple amount selection
+  if (userState[senderId] && userState[senderId].waitingForApple) {
+    const applePrices = {
+      '1': '100 INR @ NRs.185',
+      '2': '150 INR @ NRs.275',
+      '3': '200 INR @ NRs.365',
+      '4': '250 INR @ NRs.455',
+      '5': '300 INR @ NRs.545',
+      '6': '500 INR @ NRs.885',
+      '7': '1000 INR @ NRs.1720'
+    };
+    if (text === '0') {
+      delete userState[senderId];
+      return sendMainMenu(senderId);
+    }
+    const selected = applePrices[text];
+    if (selected) {
+      delete userState[senderId];
+      return sendText(senderId,
+        `🍎 Apple iTunes Redeem Code\n` +
+        `✅ Selected: ${selected}\n\n` +
+        `⚠️ Note: Requires India based Apple ID account.\n\n` +
+        `💳 Payment Details:\n` +
+        `✅ eSewa\n` +
+        `✅ Khalti\n` +
+        `✅ Bank Deposit\n\n` +
+        `Please send payment & share screenshot.\n` +
+        `Our team will verify and send your code shortly! 🙏\n\n` +
+        `— Online Service Nepal\n\n` +
+        `Reply MENU to go back to main menu.`
+      );
+    }
+    return sendAppleMenuText(senderId);
+  }
+
+  // Waiting for Operator selection
+  if (userState[senderId] && userState[senderId].waitingForOperator) {
+    const operators = {
+      '1': 'Airtel',
+      '2': 'Jio',
+      '3': 'Vi',
+      '4': 'BSNL'
+    };
+    if (text === '0') {
+      delete userState[senderId];
+      return sendMainMenu(senderId);
+    }
+    const operator = operators[text];
+    if (operator) {
+      delete userState[senderId];
+      userState[senderId] = { waitingForPhone: true, operator };
+      return sendText(senderId,
+        `📶 Operator: ${operator}\n\n` +
+        `Please type your mobile number:`
+      );
+    }
+    return sendRechargeMenuText(senderId);
+  }
+
+  // Waiting for Document type selection
+  if (userState[senderId] && userState[senderId].waitingForDoc) {
+    const docs = {
+      '1': 'Citizenship',
+      '2': 'Educational Documents',
+      '3': 'Land Owner Certificate',
+      '4': 'Tax Clearance',
+      '5': 'Property Tax Receipt',
+      '6': 'Verification From Ward Office',
+      '7': 'Others'
+    };
+    if (text === '0') {
+      delete userState[senderId];
+      return sendMainMenu(senderId);
+    }
+    const doc = docs[text];
+    if (doc) {
+      delete userState[senderId];
+      return sendText(senderId,
+        `📄 Document Translation\n` +
+        `✅ Selected: ${doc}\n\n` +
+        `Our team will contact you shortly! 🙏\n\n` +
+        `— Online Service Nepal\n\n` +
+        `Reply MENU to go back to main menu.`
+      );
+    }
+    return sendTranslationMenuText(senderId);
+  }
+
+  // Main menu triggers
+  if (['hi', 'hello', 'namaste', 'hey', 'start', 'menu'].includes(text)) {
+    return sendMainMenu(senderId);
+  }
+
+  // Main menu number selection
+  if (text === '1') return sendGoogleMenuText(senderId);
+  if (text === '2') return sendAppleMenuText(senderId);
+  if (text === '3') return sendRechargeMenuText(senderId);
+  if (text === '4') return sendTranslationMenuText(senderId);
+
+  // Default - show main menu
+  sendMainMenu(senderId);
 }
 
 // ==============================
-// 🔘 Handle Button Clicks
+// 🔘 Handle Postbacks
 // ==============================
 function handlePostback(senderId, postback) {
-  const payload = postback.payload;
-
-  if (payload === 'MAIN_MENU')           return sendMainMenu(senderId);
-  if (payload === 'PRODUCT_GOOGLE')      return sendGoogleMenu(senderId);
-  if (payload === 'PRODUCT_APPLE')       return sendAppleMenu(senderId);
-  if (payload === 'PRODUCT_RECHARGE')    return sendRechargeMenu(senderId);
-  if (payload === 'PRODUCT_TRANSLATION') return sendTranslationMenu(senderId);
-  if (payload === 'GOOGLE_TRIAL')        return sendGoogleTrial(senderId);
-  if (payload === 'GOOGLE_REGULAR')      return sendGoogleRegular(senderId);
-  if (payload === 'PROCEED_PAY')         return sendPaymentDetails(senderId);
-
-  if (payload.startsWith('GOOGLE_PRICE_')) return sendPriceConfirm(senderId, payload, 'Google INR Redeem Code 🎮');
-  if (payload.startsWith('APPLE_PRICE_'))  return sendPriceConfirm(senderId, payload, 'Apple iTunes Redeem Code 🍎');
-
-  if (payload.startsWith('OPERATOR_')) {
-    const operator = payload.replace('OPERATOR_', '');
-    userState[senderId] = { waitingForPhone: true, operator };
-    return sendText(senderId, `📱 Please type your ${operator} mobile number:`);
-  }
-
-  if (payload.startsWith('DOC_')) {
-    const docMap = {
-      DOC_CITIZENSHIP:  'Citizenship',
-      DOC_EDUCATIONAL:  'Educational Documents',
-      DOC_LAND:         'Land Owner Certificate',
-      DOC_TAX:          'Tax Clearance',
-      DOC_PROPERTY:     'Property Tax Receipt',
-      DOC_WARD:         'Verification From Ward Office',
-      DOC_OTHERS:       'Others'
-    };
-    const doc = docMap[payload] || 'Document';
-    return sendText(senderId,
-      `✅ Thank you!\n\n` +
-      `📄 Document Type: ${doc}\n\n` +
-      `Our team will contact you shortly! 🙏\n\n` +
-      `— Online Service Nepal`
-    );
-  }
+  sendMainMenu(senderId);
 }
 
 // ==============================
 // 🏠 Main Menu
 // ==============================
 function sendMainMenu(senderId) {
-  sendButtonTemplate(senderId,
-    '🙏 Hello! Namaste!\nWelcome to Online Service Nepal!\n\nHow may I help you today?\nPlease choose a product:',
-    [
-      { type: 'postback', title: '🎮 Google INR Redeem Code', payload: 'PRODUCT_GOOGLE' },
-      { type: 'postback', title: '🍎 Apple iTunes Redeem Code', payload: 'PRODUCT_APPLE' },
-      { type: 'postback', title: '📱 Indian Mobile Recharge',   payload: 'PRODUCT_RECHARGE' }
-    ]
-  ).then(() => {
-    sendButtonTemplate(senderId, 'More options:', [
-      { type: 'postback', title: '📄 Document Translation', payload: 'PRODUCT_TRANSLATION' }
-    ]);
-  });
-}
-
-// ==============================
-// 🎮 Google INR Redeem Code
-// ==============================
-function sendGoogleMenu(senderId) {
-  sendButtonTemplate(senderId,
-    '🎮 Google INR Redeem Code\n\nPlease select a pack:',
-    [
-      { type: 'postback', title: '🔹 Trial Pack (INR 10 = NRs.25)', payload: 'GOOGLE_TRIAL' },
-      { type: 'postback', title: '🔸 Regular Pack',                  payload: 'GOOGLE_REGULAR' },
-      { type: 'postback', title: '🔙 Go Back',                       payload: 'MAIN_MENU' }
-    ]
-  );
-}
-
-function sendGoogleTrial(senderId) {
-  sendButtonTemplate(senderId,
-    '🎮 Google INR Redeem Code\n🔹 Trial Pack\n\n▪️ INR 10 @ NRs. 25/-\n\n⚠️ Note: Requires India based Google Play account.',
-    [
-      { type: 'postback', title: '✅ Proceed to Pay', payload: 'PROCEED_PAY' },
-      { type: 'postback', title: '🔙 Go Back',        payload: 'PRODUCT_GOOGLE' }
-    ]
-  );
-}
-
-function sendGoogleRegular(senderId) {
-  sendQuickReplies(senderId,
-    '🎮 Google INR Redeem Code\n🔸 Regular Pack\n\nPlease select amount:',
-    [
-      { title: '50 INR = NRs.95',     payload: 'GOOGLE_PRICE_50_95' },
-      { title: '100 INR = NRs.185',   payload: 'GOOGLE_PRICE_100_185' },
-      { title: '150 INR = NRs.275',   payload: 'GOOGLE_PRICE_150_275' },
-      { title: '200 INR = NRs.365',   payload: 'GOOGLE_PRICE_200_365' },
-      { title: '250 INR = NRs.455',   payload: 'GOOGLE_PRICE_250_455' },
-      { title: '300 INR = NRs.545',   payload: 'GOOGLE_PRICE_300_545' },
-      { title: '500 INR = NRs.885',   payload: 'GOOGLE_PRICE_500_885' },
-      { title: '1000 INR = NRs.1720', payload: 'GOOGLE_PRICE_1000_1720' },
-      { title: '🔙 Go Back',          payload: 'PRODUCT_GOOGLE' }
-    ]
-  );
-}
-
-// ==============================
-// 🍎 Apple iTunes Redeem Code
-// ==============================
-function sendAppleMenu(senderId) {
-  sendQuickReplies(senderId,
-    '🍎 Apple iTunes Redeem Code\n\nPlease select amount:',
-    [
-      { title: '100 INR = NRs.185',   payload: 'APPLE_PRICE_100_185' },
-      { title: '150 INR = NRs.275',   payload: 'APPLE_PRICE_150_275' },
-      { title: '200 INR = NRs.365',   payload: 'APPLE_PRICE_200_365' },
-      { title: '250 INR = NRs.455',   payload: 'APPLE_PRICE_250_455' },
-      { title: '300 INR = NRs.545',   payload: 'APPLE_PRICE_300_545' },
-      { title: '500 INR = NRs.885',   payload: 'APPLE_PRICE_500_885' },
-      { title: '1000 INR = NRs.1720', payload: 'APPLE_PRICE_1000_1720' },
-      { title: '🔙 Go Back',          payload: 'MAIN_MENU' }
-    ]
-  );
-}
-
-// ==============================
-// 💰 Price Confirm + Pay
-// ==============================
-function sendPriceConfirm(senderId, payload, productName) {
-  const parts = payload.split('_');
-  const inr   = parts[parts.length - 2];
-  const nrs   = parts[parts.length - 1];
-  const back  = payload.startsWith('GOOGLE') ? 'GOOGLE_REGULAR' : 'PRODUCT_APPLE';
-
-  sendButtonTemplate(senderId,
-    `${productName}\n\n▪️ Amount: INR ${inr} @ NRs. ${nrs}/-\n\n⚠️ Note: Requires India based account.`,
-    [
-      { type: 'postback', title: '✅ Proceed to Pay', payload: 'PROCEED_PAY' },
-      { type: 'postback', title: '🔙 Go Back',        payload: back }
-    ]
-  );
-}
-
-function sendPaymentDetails(senderId) {
+  userState[senderId] = {};
   sendText(senderId,
-    `💳 Payment Details\n\n` +
-    `We Accept:\n` +
-    `✅ eSewa\n` +
-    `✅ Khalti\n` +
-    `✅ Bank Deposit\n\n` +
-    `📌 Please send payment & share the screenshot.\n` +
-    `Our team will verify and send your code shortly! 🙏\n\n` +
-    `Thank you for choosing Online Service Nepal! 🇳🇵`
+    '🙏 Hello! Namaste!\n' +
+    'Welcome to Online Service Nepal! 🇳🇵\n\n' +
+    'Please reply with a number:\n\n' +
+    '1️⃣  Google INR Redeem Code 🎮\n' +
+    '2️⃣  Apple iTunes Redeem Code 🍎\n' +
+    '3️⃣  Indian Mobile Recharge 📱\n' +
+    '4️⃣  Document Translation 📄\n\n' +
+    'Type the number to continue...'
   );
 }
 
 // ==============================
-// 📱 Indian Mobile Recharge
+// 🎮 Google INR Menu
 // ==============================
-function sendRechargeMenu(senderId) {
-  sendButtonTemplate(senderId,
-    '📱 Indian Mobile Recharge\n\nPlease select your operator:',
-    [
-      { type: 'postback', title: '📶 Airtel', payload: 'OPERATOR_Airtel' },
-      { type: 'postback', title: '📶 Jio',    payload: 'OPERATOR_Jio' },
-      { type: 'postback', title: '📶 Vi',     payload: 'OPERATOR_Vi' }
-    ]
-  ).then(() => {
-    sendButtonTemplate(senderId, 'More operators:', [
-      { type: 'postback', title: '📶 BSNL',    payload: 'OPERATOR_BSNL' },
-      { type: 'postback', title: '🔙 Go Back', payload: 'MAIN_MENU' }
-    ]);
-  });
-}
-
-// ==============================
-// 📄 Document Translation
-// ==============================
-function sendTranslationMenu(senderId) {
-  sendQuickReplies(senderId,
-    '📄 Official Document Translation\n\nPlease select document type:',
-    [
-      { title: '🪪 Citizenship',         payload: 'DOC_CITIZENSHIP' },
-      { title: '🎓 Educational Docs',    payload: 'DOC_EDUCATIONAL' },
-      { title: '🏠 Land Owner Cert.',    payload: 'DOC_LAND' },
-      { title: '💰 Tax Clearance',       payload: 'DOC_TAX' },
-      { title: '🧾 Property Tax',        payload: 'DOC_PROPERTY' },
-      { title: '🏢 Ward Office Verify',  payload: 'DOC_WARD' },
-      { title: '📋 Others',              payload: 'DOC_OTHERS' },
-      { title: '🔙 Go Back',             payload: 'MAIN_MENU' }
-    ]
+function sendGoogleMenuText(senderId) {
+  userState[senderId] = { waitingForGoogle: true };
+  sendText(senderId,
+    '🎮 Google INR Redeem Code\n\n' +
+    'Reply with number to select:\n\n' +
+    '1️⃣  Trial Pack - INR 10 @ NRs.25\n' +
+    '2️⃣  50 INR @ NRs.95\n' +
+    '3️⃣  100 INR @ NRs.185\n' +
+    '4️⃣  150 INR @ NRs.275\n' +
+    '5️⃣  200 INR @ NRs.365\n' +
+    '6️⃣  250 INR @ NRs.455\n' +
+    '7️⃣  300 INR @ NRs.545\n' +
+    '8️⃣  500 INR @ NRs.885\n' +
+    '9️⃣  1000 INR @ NRs.1720\n\n' +
+    '0️⃣  Back to Main Menu'
   );
 }
 
 // ==============================
-// 🛠️ Helper Functions
+// 🍎 Apple iTunes Menu
+// ==============================
+function sendAppleMenuText(senderId) {
+  userState[senderId] = { waitingForApple: true };
+  sendText(senderId,
+    '🍎 Apple iTunes Redeem Code\n\n' +
+    'Reply with number to select:\n\n' +
+    '1️⃣  100 INR @ NRs.185\n' +
+    '2️⃣  150 INR @ NRs.275\n' +
+    '3️⃣  200 INR @ NRs.365\n' +
+    '4️⃣  250 INR @ NRs.455\n' +
+    '5️⃣  300 INR @ NRs.545\n' +
+    '6️⃣  500 INR @ NRs.885\n' +
+    '7️⃣  1000 INR @ NRs.1720\n\n' +
+    '0️⃣  Back to Main Menu'
+  );
+}
+
+// ==============================
+// 📱 Mobile Recharge Menu
+// ==============================
+function sendRechargeMenuText(senderId) {
+  userState[senderId] = { waitingForOperator: true };
+  sendText(senderId,
+    '📱 Indian Mobile Recharge\n\n' +
+    'Reply with operator number:\n\n' +
+    '1️⃣  Airtel\n' +
+    '2️⃣  Jio\n' +
+    '3️⃣  Vi\n' +
+    '4️⃣  BSNL\n\n' +
+    '0️⃣  Back to Main Menu'
+  );
+}
+
+// ==============================
+// 📄 Document Translation Menu
+// ==============================
+function sendTranslationMenuText(senderId) {
+  userState[senderId] = { waitingForDoc: true };
+  sendText(senderId,
+    '📄 Official Document Translation\n\n' +
+    'Reply with number to select:\n\n' +
+    '1️⃣  Citizenship\n' +
+    '2️⃣  Educational Documents\n' +
+    '3️⃣  Land Owner Certificate\n' +
+    '4️⃣  Tax Clearance\n' +
+    '5️⃣  Property Tax Receipt\n' +
+    '6️⃣  Verification From Ward Office\n' +
+    '7️⃣  Others\n\n' +
+    '0️⃣  Back to Main Menu'
+  );
+}
+
+// ==============================
+// 🛠️ Helper Function
 // ==============================
 function sendText(senderId, text) {
-  return sendMessage(senderId, { text });
-}
-
-function sendButtonTemplate(senderId, text, buttons) {
-  return sendMessage(senderId, {
-    attachment: {
-      type: 'template',
-      payload: { template_type: 'button', text, buttons }
-    }
-  });
-}
-
-function sendQuickReplies(senderId, text, options) {
-  return sendMessage(senderId, {
-    text,
-    quick_replies: options.map(opt => ({
-      content_type: 'text',
-      title:   opt.title,
-      payload: opt.payload
-    }))
-  });
-}
-
-function sendMessage(senderId, message) {
   return axios.post(
     `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
-    { recipient: { id: senderId }, message }
+    { recipient: { id: senderId }, message: { text } }
   ).catch(err => console.error('❌ Send error:', JSON.stringify(err.response?.data)));
 }
 
