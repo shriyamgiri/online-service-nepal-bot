@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 // ==============================
 // 🔧 YOUR SETTINGS — FILL THESE
 // ==============================
-const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRdD0hZCwy7fmftrbF8b3kGOq8U46M49G1NoU1ubZCEsnpzpKjp2CSQ9TcQE0ZCdMTCVtDZCsvLsoSZCEfwibqJDkW3XUPQ33Ox3qC1TeGWVBroo1Rhc7SCHBEFbRSYqklT9HlmAr7OKfnjLw4biXo7OSEN69GstrWebcp0ny1D4KnaQYOur6JqBF6GSwzcgZDZD'; // From Facebook Developer App
+const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD'; // From Facebook Developer App
 const VERIFY_TOKEN = 'onlineservicenepal123';        // You can change this
 
 // ==============================
