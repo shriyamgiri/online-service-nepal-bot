@@ -10,7 +10,7 @@ app.use(bodyParser.json());
 // ==============================
 const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD';
 const VERIFY_TOKEN = 'onlineservicenepal123';
-const ADMIN_ID = '3296330223785000';
+const ADMIN_ID = '4217659478305444';
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
 const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes
 
