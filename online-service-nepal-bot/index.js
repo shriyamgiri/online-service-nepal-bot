@@ -54,6 +54,7 @@ app.post('/webhook', (req, res) => {
     body.entry.forEach(entry => {
       const event    = entry.messaging[0];
       const senderId = event.sender.id;
+      console.log('👤 Sender ID:', senderId);
       if (event.message)  handleMessage(senderId, event.message);
       if (event.postback) handlePostback(senderId, event.postback);
     });
