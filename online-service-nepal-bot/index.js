@@ -12,6 +12,15 @@ const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V
 const VERIFY_TOKEN = 'onlineservicenepal123';
 
 // ==============================
+// 💳 QR CODE URLs (Replace with your Google Drive URLs)
+// ==============================
+const QR_CODES = {
+  esewa:  'https://drive.google.com/uc?export=view&id=1NoIUX3PqTLzIc2kx9lH7NxwxljqxR9cb',
+  khalti: 'https://drive.google.com/uc?export=view&id=1N67wvplKTe7ttjHXsZRLMVIOII94gd3H',
+  bank:   'BANK_QR_COMING_SOON'
+};
+
+// ==============================
 // 💾 User State
 // ==============================
 const userState = {};
@@ -56,21 +65,60 @@ app.post('/webhook', (req, res) => {
 function handleMessage(senderId, message) {
   const text = (message.text || '').toLowerCase().trim();
 
-  // Waiting for mobile number
+  // ─── Waiting for mobile number ───
   if (userState[senderId] && userState[senderId].waitingForPhone) {
     const operator = userState[senderId].operator;
-    delete userState[senderId];
+    userState[senderId] = { waitingForPlan: true, operator, phone: message.text };
     return sendText(senderId,
-      `✅ Thank you!\n\n` +
-      `📶 Operator: ${operator}\n` +
       `📱 Mobile Number: ${message.text}\n\n` +
-      `Our team will contact you shortly! 🙏\n\n` +
-      `— Online Service Nepal\n\n` +
-      `Reply MENU to go back to main menu.`
+      `Please type your preferred recharge plan:\n\n` +
+      `Example:\n` +
+      `▪️ 28 days 1.5GB/day\n` +
+      `▪️ 84 days unlimited\n` +
+      `▪️ 239 plan\n\n` +
+      `Type your plan or amount below:`
     );
   }
 
-  // Waiting for Google amount selection
+  // ─── Waiting for recharge plan ───
+  if (userState[senderId] && userState[senderId].waitingForPlan) {
+    const { operator, phone } = userState[senderId];
+    userState[senderId] = {
+      waitingForPayment: true,
+      orderSummary: `📱 Mobile Recharge\n📶 Operator: ${operator}\n📞 Number: ${phone}\n📋 Plan: ${message.text}`
+    };
+    return sendPaymentMenu(senderId,
+      `✅ Order Summary:\n\n` +
+      `📶 Operator: ${operator}\n` +
+      `📞 Mobile: ${phone}\n` +
+      `📋 Plan: ${message.text}\n\n` +
+      `Now select payment method:`
+    );
+  }
+
+  // ─── Waiting for payment method ───
+  if (userState[senderId] && userState[senderId].waitingForPayment) {
+    const { orderSummary } = userState[senderId];
+    if (text === '1') {
+      delete userState[senderId];
+      return sendPaymentDetails(senderId, 'eSewa', QR_CODES.esewa, orderSummary);
+    }
+    if (text === '2') {
+      delete userState[senderId];
+      return sendPaymentDetails(senderId, 'Khalti', QR_CODES.khalti, orderSummary);
+    }
+    if (text === '3') {
+      delete userState[senderId];
+      return sendPaymentDetails(senderId, 'Bank Transfer', QR_CODES.bank, orderSummary);
+    }
+    if (text === '0') {
+      delete userState[senderId];
+      return sendMainMenu(senderId);
+    }
+    return sendPaymentMenu(senderId, 'Please reply 1, 2 or 3 to select payment:');
+  }
+
+  // ─── Waiting for Google amount ───
   if (userState[senderId] && userState[senderId].waitingForGoogle) {
     const googlePrices = {
       '1': 'Trial Pack - INR 10 @ NRs.25',
@@ -83,31 +131,21 @@ function handleMessage(senderId, message) {
       '8': '500 INR @ NRs.885',
       '9': '1000 INR @ NRs.1720'
     };
-    if (text === '0') {
-      delete userState[senderId];
-      return sendMainMenu(senderId);
-    }
+    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
     const selected = googlePrices[text];
     if (selected) {
-      delete userState[senderId];
-      return sendText(senderId,
-        `🎮 Google INR Redeem Code\n` +
-        `✅ Selected: ${selected}\n\n` +
-        `⚠️ Note: Requires India based Google Play account.\n\n` +
-        `💳 Payment Details:\n` +
-        `✅ eSewa\n` +
-        `✅ Khalti\n` +
-        `✅ Bank Deposit\n\n` +
-        `Please send payment & share screenshot.\n` +
-        `Our team will verify and send your code shortly! 🙏\n\n` +
-        `— Online Service Nepal\n\n` +
-        `Reply MENU to go back to main menu.`
+      userState[senderId] = {
+        waitingForPayment: true,
+        orderSummary: `🎮 Google INR Redeem Code\n▪️ ${selected}`
+      };
+      return sendPaymentMenu(senderId,
+        `🎮 Google INR Redeem Code\n✅ Selected: ${selected}\n\n⚠️ Requires India based Google Play account.\n\nSelect payment method:`
       );
     }
     return sendGoogleMenuText(senderId);
   }
 
-  // Waiting for Apple amount selection
+  // ─── Waiting for Apple amount ───
   if (userState[senderId] && userState[senderId].waitingForApple) {
     const applePrices = {
       '1': '100 INR @ NRs.185',
@@ -118,55 +156,34 @@ function handleMessage(senderId, message) {
       '6': '500 INR @ NRs.885',
       '7': '1000 INR @ NRs.1720'
     };
-    if (text === '0') {
-      delete userState[senderId];
-      return sendMainMenu(senderId);
-    }
+    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
     const selected = applePrices[text];
     if (selected) {
-      delete userState[senderId];
-      return sendText(senderId,
-        `🍎 Apple iTunes Redeem Code\n` +
-        `✅ Selected: ${selected}\n\n` +
-        `⚠️ Note: Requires India based Apple ID account.\n\n` +
-        `💳 Payment Details:\n` +
-        `✅ eSewa\n` +
-        `✅ Khalti\n` +
-        `✅ Bank Deposit\n\n` +
-        `Please send payment & share screenshot.\n` +
-        `Our team will verify and send your code shortly! 🙏\n\n` +
-        `— Online Service Nepal\n\n` +
-        `Reply MENU to go back to main menu.`
+      userState[senderId] = {
+        waitingForPayment: true,
+        orderSummary: `🍎 Apple iTunes Redeem Code\n▪️ ${selected}`
+      };
+      return sendPaymentMenu(senderId,
+        `🍎 Apple iTunes Redeem Code\n✅ Selected: ${selected}\n\n⚠️ Requires India based Apple ID account.\n\nSelect payment method:`
       );
     }
     return sendAppleMenuText(senderId);
   }
 
-  // Waiting for Operator selection
+  // ─── Waiting for Operator ───
   if (userState[senderId] && userState[senderId].waitingForOperator) {
-    const operators = {
-      '1': 'Airtel',
-      '2': 'Jio',
-      '3': 'Vi',
-      '4': 'BSNL'
-    };
-    if (text === '0') {
-      delete userState[senderId];
-      return sendMainMenu(senderId);
-    }
+    const operators = { '1': 'Airtel', '2': 'Jio', '3': 'Vi', '4': 'BSNL' };
+    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
     const operator = operators[text];
     if (operator) {
       delete userState[senderId];
       userState[senderId] = { waitingForPhone: true, operator };
-      return sendText(senderId,
-        `📶 Operator: ${operator}\n\n` +
-        `Please type your mobile number:`
-      );
+      return sendText(senderId, `📶 Operator: ${operator}\n\nPlease type your mobile number:`);
     }
     return sendRechargeMenuText(senderId);
   }
 
-  // Waiting for Document type selection
+  // ─── Waiting for Document type ───
   if (userState[senderId] && userState[senderId].waitingForDoc) {
     const docs = {
       '1': 'Citizenship',
@@ -177,43 +194,36 @@ function handleMessage(senderId, message) {
       '6': 'Verification From Ward Office',
       '7': 'Others'
     };
-    if (text === '0') {
-      delete userState[senderId];
-      return sendMainMenu(senderId);
-    }
+    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
     const doc = docs[text];
     if (doc) {
       delete userState[senderId];
       return sendText(senderId,
-        `📄 Document Translation\n` +
-        `✅ Selected: ${doc}\n\n` +
+        `📄 Document Translation\n✅ Selected: ${doc}\n\n` +
         `Our team will contact you shortly! 🙏\n\n` +
-        `— Online Service Nepal\n\n` +
-        `Reply MENU to go back to main menu.`
+        `— Online Service Nepal\n\nReply MENU to go back.`
       );
     }
     return sendTranslationMenuText(senderId);
   }
 
-  // Main menu triggers
+  // ─── Main triggers ───
   if (['hi', 'hello', 'namaste', 'hey', 'start', 'menu'].includes(text)) {
     return sendMainMenu(senderId);
   }
 
-  // Main menu number selection
   if (text === '1') return sendGoogleMenuText(senderId);
   if (text === '2') return sendAppleMenuText(senderId);
   if (text === '3') return sendRechargeMenuText(senderId);
   if (text === '4') return sendTranslationMenuText(senderId);
 
-  // Default - show main menu
   sendMainMenu(senderId);
 }
 
 // ==============================
 // 🔘 Handle Postbacks
 // ==============================
-function handlePostback(senderId, postback) {
+function handlePostback(senderId) {
   sendMainMenu(senderId);
 }
 
@@ -307,6 +317,46 @@ function sendTranslationMenuText(senderId) {
     '7️⃣  Others\n\n' +
     '0️⃣  Back to Main Menu'
   );
+}
+
+// ==============================
+// 💳 Payment Menu
+// ==============================
+function sendPaymentMenu(senderId, intro) {
+  sendText(senderId,
+    `${intro}\n\n` +
+    '1️⃣  eSewa\n' +
+    '2️⃣  Khalti\n' +
+    '3️⃣  Bank Transfer\n\n' +
+    '0️⃣  Back to Main Menu'
+  );
+}
+
+// ==============================
+// 💳 Send Payment Details + QR
+// ==============================
+function sendPaymentDetails(senderId, method, qrUrl, orderSummary) {
+  sendText(senderId,
+    `✅ Order Summary:\n${orderSummary}\n\n` +
+    `💳 Payment Method: ${method}\n\n` +
+    `📸 Scan the QR code below to pay.\n` +
+    `After payment, please send us the screenshot.\n` +
+    `Our team will verify and process your order shortly! 🙏\n\n` +
+    `— Online Service Nepal`
+  );
+  // Send QR code image
+  return axios.post(
+    `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    {
+      recipient: { id: senderId },
+      message: {
+        attachment: {
+          type: 'image',
+          payload: { url: qrUrl, is_reusable: true }
+        }
+      }
+    }
+  ).catch(err => console.error('❌ QR Send error:', JSON.stringify(err.response?.data)));
 }
 
 // ==============================
