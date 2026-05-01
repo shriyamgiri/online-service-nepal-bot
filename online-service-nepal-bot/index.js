@@ -8,11 +8,11 @@ app.use(bodyParser.json());
 // ==============================
 // 🔧 YOUR SETTINGS
 // ==============================
-const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD'; // Paste your token here
+const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD';
 const VERIFY_TOKEN = 'onlineservicenepal123';
-const ADMIN_ID = '3296330223785000'; // Your personal Facebook user ID
+const ADMIN_ID = '3296330223785000';
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
-const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes in milliseconds
+const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes
 
 // ==============================
 // 💳 QR CODE URLs
@@ -27,8 +27,8 @@ const QR_CODES = {
 // 💾 User State & Tracking
 // ==============================
 const userState = {};
-const userLastSeen = {};   // tracks last message time
-const knownUsers = {};     // tracks if user has chatted before
+const userLastSeen = {};
+const knownUsers = {};
 
 // ==============================
 // ✅ Webhook Verification
@@ -69,27 +69,21 @@ app.post('/webhook', (req, res) => {
 function checkSession(senderId) {
   const now = Date.now();
   const lastSeen = userLastSeen[senderId];
-
   if (lastSeen && (now - lastSeen) > SESSION_TIMEOUT) {
-    // Session expired — reset
     delete userState[senderId];
     userLastSeen[senderId] = now;
-    return true; // session was expired
+    return true;
   }
-
   userLastSeen[senderId] = now;
-  return false; // session is still active
+  return false;
 }
 
 // ==============================
 // 🌅 Time Based Greeting
 // ==============================
 function getGreeting() {
-  const hour = new Date().getUTCHours() + 5; // Nepal is UTC+5:45
-  const mins = 45;
-  const nepalHour = (hour + Math.floor(mins / 60)) % 24;
-
-  if (nepalHour >= 5 && nepalHour < 12)  return '🌅 Good Morning';
+  const nepalHour = (new Date().getUTCHours() + 5) % 24;
+  if (nepalHour >= 5  && nepalHour < 12) return '🌅 Good Morning';
   if (nepalHour >= 12 && nepalHour < 17) return '☀️ Good Afternoon';
   if (nepalHour >= 17 && nepalHour < 21) return '🌆 Good Evening';
   return '🌙 Good Night';
@@ -99,19 +93,19 @@ function getGreeting() {
 // 💬 Handle Text Messages
 // ==============================
 function handleMessage(senderId, message) {
-  const text = (message.text || '').toLowerCase().trim();
+  const text    = (message.text || '').toLowerCase().trim();
   const rawText = (message.text || '').trim();
 
-  // ─── Log Sender ID (to find Admin ID) ───
+  // ─── Log Sender ID ───
   console.log('👤 Sender ID:', senderId);
 
-  // ─── Customer sent an image/screenshot ───
+  // ─── Customer sent image/screenshot ───
   if (message.attachments && message.attachments[0].type === 'image') {
-    // If already waiting for payment confirmation
-    if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) {
-      return; // already asked, wait for yes/no
-    }
-    userState[senderId] = { waitingForPaymentConfirm: true };
+    if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) return;
+    userState[senderId] = {
+      ...userState[senderId],
+      waitingForPaymentConfirm: true
+    };
     return sendText(senderId,
       `📸 We received your image!\n\n` +
       `Is this a payment screenshot?\n\n` +
@@ -123,17 +117,28 @@ function handleMessage(senderId, message) {
   // ─── Waiting for payment screenshot confirmation ───
   if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) {
     if (text === '1') {
-      delete userState[senderId];
+      const lastOrder = userState[senderId].lastOrder || 'your order';
+      userState[senderId] = { waitingForOrder: true, lastOrder };
+      // Notify admin
+      sendText(ADMIN_ID,
+        `💰 Payment Confirmed!\n\n` +
+        `👤 Customer ID: ${senderId}\n` +
+        `🛒 Last Order: ${lastOrder}\n\n` +
+        `⬇️ Copy & send this to complete:\n` +
+        `COMPLETE ${senderId} ${lastOrder}`
+      );
       return sendText(senderId,
         `📸 Payment Screenshot Received!\n\n` +
         `✅ Thank you for your payment!\n\n` +
         `Our team will verify and process\n` +
         `your order shortly! 🙏\n\n` +
-        `— Online Service Nepal`
+        `— Online Service Nepal\n\n` +
+        `Feel free to send any follow up\n` +
+        `message if needed! 😊`
       );
     }
     if (text === '2') {
-      delete userState[senderId];
+      delete userState[senderId].waitingForPaymentConfirm;
       return sendText(senderId,
         `No problem! 😊\n\n` +
         `What would you like to do?\n\n` +
@@ -149,12 +154,27 @@ function handleMessage(senderId, message) {
     );
   }
 
+  // ─── Waiting for order (after payment confirmed) ───
+  // Customer can send follow up messages freely
+  if (userState[senderId] && userState[senderId].waitingForOrder) {
+    if (['menu', 'hi', 'hello', 'start'].includes(text)) {
+      delete userState[senderId];
+      return sendWelcome(senderId);
+    }
+    return sendText(senderId,
+      `✅ Your message has been received!\n\n` +
+      `Our team will get back to you shortly! 🙏\n\n` +
+      `— Online Service Nepal`
+    );
+  }
+
   // ─── Admin COMPLETE command ───
   if (senderId === ADMIN_ID && rawText.toUpperCase().startsWith('COMPLETE')) {
     const parts = rawText.split(' ');
-    const customerId = parts[1];
+    const customerId  = parts[1];
     const orderDetails = parts.slice(2).join(' ');
     if (customerId && orderDetails) {
+      delete userState[customerId]; // clear customer session
       sendText(customerId,
         `✅ Your Order is Completed!\n\n` +
         `📦 ${orderDetails}\n\n` +
@@ -163,9 +183,9 @@ function handleMessage(senderId, message) {
         `👉 ${REVIEW_LINK}\n\n` +
         `Your review helps us serve you better! 🇳🇵`
       );
-      return sendText(senderId, `✅ Order completion sent to customer: ${customerId}`);
+      return sendText(ADMIN_ID, `✅ Order completed for customer: ${customerId}`);
     }
-    return sendText(senderId, `⚠️ Format: COMPLETE [CustomerID] [OrderDetails]`);
+    return sendText(ADMIN_ID, `⚠️ Format: COMPLETE [CustomerID] [OrderDetails]`);
   }
 
   // ─── Check session timeout ───
@@ -175,9 +195,8 @@ function handleMessage(senderId, message) {
     return sendText(senderId,
       `👋 Welcome back!\n\n` +
       `${greeting}! Your previous session has expired.\n\n` +
-      `Let's start fresh! 😊\n\n` +
-      `Reply MENU to see our options.`
-    ).then(() => sendMainMenu(senderId));
+      `Let's start fresh! 😊`
+    ).then(() => sendWelcome(senderId));
   }
 
   // ─── Waiting for mobile number ───
@@ -220,32 +239,56 @@ function handleMessage(senderId, message) {
     return sendPaymentMenu(senderId, 'Please reply 1, 2 or 3 to select payment:');
   }
 
-  // ─── Waiting for Google amount ───
-  if (userState[senderId] && userState[senderId].waitingForGoogle) {
+  // ─── Waiting for Google Pack Type ───
+  if (userState[senderId] && userState[senderId].waitingForGooglePack) {
+    if (text === '1') return sendGoogleTrialPack(senderId);
+    if (text === '2') return sendGoogleRegularPack(senderId);
+    if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
+    return sendGoogleMenuText(senderId);
+  }
+
+  // ─── Waiting for Google Trial confirmation ───
+  if (userState[senderId] && userState[senderId].waitingForGoogleTrial) {
+    if (text === '1') {
+      userState[senderId] = {
+        waitingForPayment: true,
+        lastOrder: 'Google INR Trial Pack - INR 10 @ NRs.25',
+        orderSummary: '🎮 Google INR Redeem Code\n▪️ Trial Pack - INR 10 @ NRs.25'
+      };
+      return sendPaymentMenu(senderId,
+        `🎮 Google INR - Trial Pack\n✅ Selected: INR 10 @ NRs.25\n\nSelect payment method:`
+      );
+    }
+    if (text === '0') { delete userState[senderId]; return sendGoogleMenuText(senderId); }
+    return sendGoogleTrialPack(senderId);
+  }
+
+  // ─── Waiting for Google Regular amount ───
+  if (userState[senderId] && userState[senderId].waitingForGoogleRegular) {
     const googlePrices = {
-      '1': 'Trial Pack - INR 10 @ NRs.25',
-      '2': '50 INR @ NRs.95',
-      '3': '100 INR @ NRs.185',
-      '4': '150 INR @ NRs.275',
-      '5': '200 INR @ NRs.365',
-      '6': '250 INR @ NRs.455',
-      '7': '300 INR @ NRs.545',
-      '8': '500 INR @ NRs.885',
-      '9': '1000 INR @ NRs.1720'
+      '1': '50 INR @ NRs.95',
+      '2': '100 INR @ NRs.185',
+      '3': '150 INR @ NRs.275',
+      '4': '200 INR @ NRs.365',
+      '5': '250 INR @ NRs.455',
+      '6': '300 INR @ NRs.545',
+      '7': '500 INR @ NRs.885',
+      '8': '1000 INR @ NRs.1720'
     };
-    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
+    if (text === '0') { delete userState[senderId]; return sendGoogleMenuText(senderId); }
     const selected = googlePrices[text];
     if (selected) {
       userState[senderId] = {
         waitingForPayment: true,
+        lastOrder: `Google INR Regular - ${selected}`,
         orderSummary: `🎮 Google INR Redeem Code\n▪️ ${selected}`
       };
       return sendPaymentMenu(senderId,
-        `🎮 Google INR Redeem Code\n✅ Selected: ${selected}\n\n` +
+        `🎮 Google INR - Regular Pack\n✅ Selected: ${selected}\n\n` +
         `⚠️ Requires India based Google Play account.\n\nSelect payment method:`
       );
     }
-    return sendGoogleMenuText(senderId);
+    return sendGoogleRegularPack(senderId);
   }
 
   // ─── Waiting for Apple amount ───
@@ -259,11 +302,12 @@ function handleMessage(senderId, message) {
       '6': '500 INR @ NRs.885',
       '7': '1000 INR @ NRs.1720'
     };
-    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
+    if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
     const selected = applePrices[text];
     if (selected) {
       userState[senderId] = {
         waitingForPayment: true,
+        lastOrder: `Apple iTunes - ${selected}`,
         orderSummary: `🍎 Apple iTunes Redeem Code\n▪️ ${selected}`
       };
       return sendPaymentMenu(senderId,
@@ -277,7 +321,7 @@ function handleMessage(senderId, message) {
   // ─── Waiting for Operator ───
   if (userState[senderId] && userState[senderId].waitingForOperator) {
     const operators = { '1': 'Airtel', '2': 'Jio', '3': 'Vi', '4': 'BSNL' };
-    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
+    if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
     const operator = operators[text];
     if (operator) {
       delete userState[senderId];
@@ -298,7 +342,7 @@ function handleMessage(senderId, message) {
       '6': 'Verification From Ward Office',
       '7': 'Others'
     };
-    if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
+    if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
     const doc = docs[text];
     if (doc) {
       delete userState[senderId];
@@ -322,7 +366,7 @@ function handleMessage(senderId, message) {
     );
   }
 
-  // ─── Main menu triggers ───
+  // ─── Main triggers ───
   if (['hi', 'hello', 'namaste', 'hey', 'start', 'menu'].includes(text)) {
     return sendWelcome(senderId);
   }
@@ -332,10 +376,10 @@ function handleMessage(senderId, message) {
   if (text === '2') return sendSupportMenu(senderId);
 
   // ─── Services option selection ───
-  if (text === 'a') return sendGoogleMenuText(senderId);
-  if (text === 'b') return sendAppleMenuText(senderId);
-  if (text === 'c') return sendRechargeMenuText(senderId);
-  if (text === 'd') return sendTranslationMenuText(senderId);
+  if (text === '3') return sendGoogleMenuText(senderId);
+  if (text === '4') return sendAppleMenuText(senderId);
+  if (text === '5') return sendRechargeMenuText(senderId);
+  if (text === '6') return sendTranslationMenuText(senderId);
 
   // Default
   sendWelcome(senderId);
@@ -352,10 +396,10 @@ function handlePostback(senderId) {
 // 👋 Welcome Message
 // ==============================
 function sendWelcome(senderId) {
-  const greeting = getGreeting();
+  const greeting   = getGreeting();
   const isReturning = knownUsers[senderId];
   knownUsers[senderId] = true;
-  userState[senderId] = {};
+  userState[senderId]  = {};
 
   if (isReturning) {
     sendText(senderId,
@@ -380,7 +424,7 @@ function sendWelcome(senderId) {
 }
 
 // ==============================
-// 🏠 Main Menu (after welcome)
+// 🏠 Main Menu
 // ==============================
 function sendMainMenu(senderId) {
   userState[senderId] = {};
@@ -399,11 +443,11 @@ function sendServicesMenu(senderId) {
   userState[senderId] = { inServices: true };
   sendText(senderId,
     `🛒 Our Services\n\n` +
-    `Please reply with a letter:\n\n` +
-    `A  Google INR Redeem Code 🎮\n` +
-    `B  Apple iTunes Redeem Code 🍎\n` +
-    `C  Indian Mobile Recharge 📱\n` +
-    `D  Document Translation 📄\n\n` +
+    `Please reply with a number:\n\n` +
+    `3️⃣  Google INR Redeem Code 🎮\n` +
+    `4️⃣  Apple iTunes Redeem Code 🍎\n` +
+    `5️⃣  Indian Mobile Recharge 📱\n` +
+    `6️⃣  Document Translation 📄\n\n` +
     `0️⃣  Back to Main Menu`
   );
 }
@@ -422,23 +466,61 @@ function sendSupportMenu(senderId) {
 }
 
 // ==============================
-// 🎮 Google INR Menu
+// 🎮 Google INR Menu (Pack Selection)
 // ==============================
 function sendGoogleMenuText(senderId) {
-  userState[senderId] = { waitingForGoogle: true };
+  userState[senderId] = { waitingForGooglePack: true };
   sendText(senderId,
     `🎮 Google INR Redeem Code\n\n` +
+    `Please select a pack:\n\n` +
+    `1️⃣  Trial Pack\n` +
+    `2️⃣  Regular Pack\n\n` +
+    `0️⃣  Back to Services`
+  );
+}
+
+// ==============================
+// 🎮 Google Trial Pack
+// ==============================
+function sendGoogleTrialPack(senderId) {
+  userState[senderId] = { waitingForGoogleTrial: true };
+  sendText(senderId,
+    `🎮 Google INR Redeem Code\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `⚠️ Before Buying This!!!\n\n` +
+    `Try our exclusive "Trial Pack" to check\n` +
+    `your Google Indian Play Account is\n` +
+    `working in Nepal.\n\n` +
+    `▪️ INR 10 for NRs. 25/-\n\n` +
+    `🚫 Non-Refundable.\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `1️⃣  Proceed to Buy\n` +
+    `0️⃣  Back`
+  );
+}
+
+// ==============================
+// 🎮 Google Regular Pack
+// ==============================
+function sendGoogleRegularPack(senderId) {
+  userState[senderId] = { waitingForGoogleRegular: true };
+  sendText(senderId,
+    `🎮 Google INR Redeem Code\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n` +
+    `🔸 Regular Pack\n\n` +
     `Reply with number to select:\n\n` +
-    `1️⃣  Trial Pack - INR 10 @ NRs.25\n` +
-    `2️⃣  50 INR @ NRs.95\n` +
-    `3️⃣  100 INR @ NRs.185\n` +
-    `4️⃣  150 INR @ NRs.275\n` +
-    `5️⃣  200 INR @ NRs.365\n` +
-    `6️⃣  250 INR @ NRs.455\n` +
-    `7️⃣  300 INR @ NRs.545\n` +
-    `8️⃣  500 INR @ NRs.885\n` +
-    `9️⃣  1000 INR @ NRs.1720\n\n` +
-    `0️⃣  Back to Main Menu`
+    `1️⃣  50 INR @ NRs.95\n` +
+    `2️⃣  100 INR @ NRs.185\n` +
+    `3️⃣  150 INR @ NRs.275\n` +
+    `4️⃣  200 INR @ NRs.365\n` +
+    `5️⃣  250 INR @ NRs.455\n` +
+    `6️⃣  300 INR @ NRs.545\n` +
+    `7️⃣  500 INR @ NRs.885\n` +
+    `8️⃣  1000 INR @ NRs.1720\n\n` +
+    `⚠️ Requires India based Google Play account.\n` +
+    `🚫 Non-Refundable.\n` +
+    `━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `0️⃣  Back`
   );
 }
 
@@ -457,7 +539,8 @@ function sendAppleMenuText(senderId) {
     `5️⃣  300 INR @ NRs.545\n` +
     `6️⃣  500 INR @ NRs.885\n` +
     `7️⃣  1000 INR @ NRs.1720\n\n` +
-    `0️⃣  Back to Main Menu`
+    `⚠️ Requires India based Apple ID account.\n\n` +
+    `0️⃣  Back to Services`
   );
 }
 
@@ -473,7 +556,7 @@ function sendRechargeMenuText(senderId) {
     `2️⃣  Jio\n` +
     `3️⃣  Vi\n` +
     `4️⃣  BSNL\n\n` +
-    `0️⃣  Back to Main Menu`
+    `0️⃣  Back to Services`
   );
 }
 
@@ -492,7 +575,7 @@ function sendTranslationMenuText(senderId) {
     `5️⃣  Property Tax Receipt\n` +
     `6️⃣  Verification From Ward Office\n` +
     `7️⃣  Others\n\n` +
-    `0️⃣  Back to Main Menu`
+    `0️⃣  Back to Services`
   );
 }
 
@@ -536,7 +619,7 @@ function sendPaymentDetails(senderId, method, qrUrl, orderSummary) {
     ).catch(err => console.error('❌ QR Send error:', JSON.stringify(err.response?.data)));
   } else {
     sendText(senderId,
-      `🏦 Bank Transfer details:\n` +
+      `🏦 Bank Transfer:\n` +
       `Our team will send you the bank details shortly! 🙏`
     );
   }
