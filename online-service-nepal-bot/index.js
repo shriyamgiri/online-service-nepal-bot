@@ -10,7 +10,7 @@ app.use(bodyParser.json());
 // ==============================
 const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD'; // Paste your token here
 const VERIFY_TOKEN = 'onlineservicenepal123';
-const ADMIN_ID = '100063746213'; // Your personal Facebook user ID
+const ADMIN_ID = '3296330223785000'; // Your personal Facebook user ID
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
 const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes in milliseconds
 
@@ -54,7 +54,6 @@ app.post('/webhook', (req, res) => {
     body.entry.forEach(entry => {
       const event    = entry.messaging[0];
       const senderId = event.sender.id;
-      console.log('👤 Sender ID:', senderId);
       if (event.message)  handleMessage(senderId, event.message);
       if (event.postback) handlePostback(senderId, event.postback);
     });
@@ -102,6 +101,53 @@ function getGreeting() {
 function handleMessage(senderId, message) {
   const text = (message.text || '').toLowerCase().trim();
   const rawText = (message.text || '').trim();
+
+  // ─── Log Sender ID (to find Admin ID) ───
+  console.log('👤 Sender ID:', senderId);
+
+  // ─── Customer sent an image/screenshot ───
+  if (message.attachments && message.attachments[0].type === 'image') {
+    // If already waiting for payment confirmation
+    if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) {
+      return; // already asked, wait for yes/no
+    }
+    userState[senderId] = { waitingForPaymentConfirm: true };
+    return sendText(senderId,
+      `📸 We received your image!\n\n` +
+      `Is this a payment screenshot?\n\n` +
+      `1️⃣  Yes — Payment Screenshot\n` +
+      `2️⃣  No — Something Else`
+    );
+  }
+
+  // ─── Waiting for payment screenshot confirmation ───
+  if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) {
+    if (text === '1') {
+      delete userState[senderId];
+      return sendText(senderId,
+        `📸 Payment Screenshot Received!\n\n` +
+        `✅ Thank you for your payment!\n\n` +
+        `Our team will verify and process\n` +
+        `your order shortly! 🙏\n\n` +
+        `— Online Service Nepal`
+      );
+    }
+    if (text === '2') {
+      delete userState[senderId];
+      return sendText(senderId,
+        `No problem! 😊\n\n` +
+        `What would you like to do?\n\n` +
+        `1️⃣  Browse Services 🛒\n` +
+        `2️⃣  Talk to Our Team 💬\n\n` +
+        `Type 1 or 2 to continue...`
+      );
+    }
+    return sendText(senderId,
+      `Please reply:\n` +
+      `1️⃣  Yes — Payment Screenshot\n` +
+      `2️⃣  No — Something Else`
+    );
+  }
 
   // ─── Admin COMPLETE command ───
   if (senderId === ADMIN_ID && rawText.toUpperCase().startsWith('COMPLETE')) {
