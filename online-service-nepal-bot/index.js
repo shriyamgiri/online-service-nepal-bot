@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 // ==============================
 // 🔧 YOUR SETTINGS
 // ==============================
-const PAGE_ACCESS_TOKEN = 'YOUR_PAGE_ACCESS_TOKEN';
+const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD';
 const VERIFY_TOKEN = 'onlineservicenepal123';
 const ADMIN_ID = '3296330223785000';
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
