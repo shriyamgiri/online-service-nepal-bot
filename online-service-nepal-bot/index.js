@@ -33,7 +33,8 @@ const knownUsers = {};
 // ==============================
 // ✅ Webhook Verification
 // ==============================
-app.get('/webhook', (req, res) => {
+app.post('/health', (req, res) => {
+  res.start(200).send('Bot is Running!');
   const mode      = req.query['hub.mode'];
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -48,7 +49,8 @@ app.get('/webhook', (req, res) => {
 // ==============================
 // 📩 Receive Messages
 // ==============================
-app.post('/webhook', (req, res) => {
+app.post('/health', (req, res) => {
+  res.start(200).send('Bot is Running!'); 
   const body = req.body;
   if (body.object === 'page') {
     body.entry.forEach(entry => {
