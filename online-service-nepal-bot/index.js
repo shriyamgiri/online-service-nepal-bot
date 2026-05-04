@@ -8,9 +8,9 @@ app.use(bodyParser.json());
 // ==============================
 // 🔧 YOUR SETTINGS
 // ==============================
-const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRf69vaXXiCmumZBHeNiX1Mj39eaZAveWlWDLdu7V2AEhZCYmD3Eci1ISNI5cTk1vzN5To7X5fJmUy1EdLJ527BOmn8PtsAuXfbMS6JnOW4sraIVq1JcxtgEpV4r9I8cAMZBkqYUOqNUMyoM80NqxT2iBK5rbZCStnsCkaYxDek6mvGhq0pVmkVlmCnhsoygZDZD';
+const PAGE_ACCESS_TOKEN = 'YOUR_PAGE_ACCESS_TOKEN';
 const VERIFY_TOKEN = 'onlineservicenepal123';
-const ADMIN_ID = '4217659478305444';
+const ADMIN_ID = '3296330223785000';
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
 const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes
 
@@ -33,8 +33,14 @@ const knownUsers = {};
 // ==============================
 // ✅ Webhook Verification
 // ==============================
-app.post('/health', (req, res) => {
-  res.start(200).send('Bot is Running!');
+// ==============================
+// 💓 Health Check for UptimeRobot
+// ==============================
+app.get('/health', (req, res) => {
+  res.status(200).send('✅ Bot is Running!');
+});
+
+app.get('/webhook', (req, res) => {
   const mode      = req.query['hub.mode'];
   const token     = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -49,8 +55,7 @@ app.post('/health', (req, res) => {
 // ==============================
 // 📩 Receive Messages
 // ==============================
-app.post('/health', (req, res) => {
-  res.start(200).send('Bot is Running!'); 
+app.post('/webhook', (req, res) => {
   const body = req.body;
   if (body.object === 'page') {
     body.entry.forEach(entry => {
