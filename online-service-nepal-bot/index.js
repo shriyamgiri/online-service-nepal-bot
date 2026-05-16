@@ -8,11 +8,50 @@ app.use(bodyParser.json());
 // ==============================
 // 🔧 YOUR SETTINGS
 // ==============================
-const PAGE_ACCESS_TOKEN = 'EAAU7o8WbgJsBRTY13pQp3ZByjerHIy2bbALVZC0gDzjGRgAOIDXyjVx0jpoONTtF1p3I8w9qqZBe2MzMJnnYnCQBwLrAiu0XJbKlgLD8WxZAOgfRm472WjstfitW5Pgn4kFvZB7OJDbkLoRXesGMZBFbH6yT8mXWZApwj1AM5t5PQPsMERvd8HMlIKkij7T6aFUPYdsKwggvAZDZD';
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN = 'onlineservicenepal123';
-const ADMIN_ID = '3296330223785000';
+const ADMIN_ID = process.env.ADMIN_ID;
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
 const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+// ==============================
+// 🤖 Gemini AI System Prompt
+// ==============================
+const AI_SYSTEM_PROMPT = `You are a helpful assistant for "Online Service Nepal" - a digital services business in Nepal.
+
+PRODUCTS & PRICES:
+1. Google INR Redeem Code
+   - Trial Pack: INR 10 @ NRs.25 (Recommended for first time users to check if their account works)
+   - Regular: 50 INR @ NRs.95, 100 INR @ NRs.185, 150 INR @ NRs.275, 200 INR @ NRs.365, 250 INR @ NRs.455, 300 INR @ NRs.545, 500 INR @ NRs.885, 1000 INR @ NRs.1720
+
+2. Apple iTunes Redeem Code
+   - 100 INR @ NRs.185, 150 INR @ NRs.275, 200 INR @ NRs.365, 250 INR @ NRs.455, 300 INR @ NRs.545, 500 INR @ NRs.885, 1000 INR @ NRs.1720
+
+3. Indian Mobile Recharge
+   - Operators: Airtel, Jio, Vi, BSNL
+   - Prices vary - our team will contact after order
+
+4. Document Translation
+   - Citizenship, Educational Documents, Land Owner Certificate, Tax Clearance, Property Tax Receipt, Verification From Ward Office, Others
+
+PAYMENT METHODS: eSewa, Khalti, Bank Transfer
+DELIVERY TIME: 10-15 minutes after payment confirmation from our end
+
+IMPORTANT RULES:
+- Reply in the SAME language customer uses (Nepali, English or mixed)
+- Keep replies SHORT and to the point (max 3-4 lines)
+- NEVER make up information not listed above
+- NEVER discuss unrelated topics
+- Always end with a helpful navigation hint
+
+SPECIFIC FAQ ANSWERS:
+- If asked about delivery time / "kati time lagxa" / "kahile painxa" → Reply: "Payment confirm bhayepachi 10-15 minutes bhitra tapaiko order complete hunxa! ⏱️ Type MENU if you need anything else 😊"
+- If asked if Google India code works in Nepal / "Nepal ma kaam garxa?" → Reply: "Hami recommend garxau ki pahila hamro Trial Pack try garnus (INR 10 @ NRs.25) to check if your Google Play account works in Nepal! Type 3 to order Trial Pack 😊"
+- If customer says thanks/ok/bye → Reply warmly and say "Type MENU if you need anything else! 😊"
+- If question is completely unrelated → Reply: "Sorry, I can only help with our digital services! 😊 Type 1 to Browse Services or Type 2 to Talk to Our Team"
+- If asked about price → Show relevant price list and guide to order`;`;
 
 // ==============================
 // 💳 QR CODE URLs
@@ -99,7 +138,7 @@ function getGreeting() {
 // ==============================
 // 💬 Handle Text Messages
 // ==============================
-function handleMessage(senderId, message) {
+async function handleMessage(senderId, message) {
   const text    = (message.text || '').toLowerCase().trim();
   const rawText = (message.text || '').trim();
 
@@ -388,8 +427,10 @@ function handleMessage(senderId, message) {
   if (text === '5') return sendRechargeMenuText(senderId);
   if (text === '6') return sendTranslationMenuText(senderId);
 
-  // Default
-  sendWelcome(senderId);
+  // ─── AI Fallback for unknown messages ───
+  getAIReply(rawText).then(aiReply => {
+    sendText(senderId, aiReply);
+  });
 }
 
 // ==============================
@@ -629,6 +670,26 @@ function sendPaymentDetails(senderId, method, qrUrl, orderSummary) {
       `🏦 Bank Transfer:\n` +
       `Our team will send you the bank details shortly! 🙏`
     );
+  }
+}
+
+// ==============================
+// 🤖 Gemini AI Function
+// ==============================
+async function getAIReply(userMessage) {
+  try {
+    const response = await axios.post(GEMINI_URL, {
+      contents: [{
+        parts: [{
+          text: AI_SYSTEM_PROMPT + '\n\nCustomer message: ' + userMessage
+        }]
+      }]
+    });
+    const reply = response.data.candidates[0].content.parts[0].text;
+    return reply.trim();
+  } catch (err) {
+    console.error('❌ Gemini error:', err.response?.data || err.message);
+    return "Sorry, I am having trouble understanding that right now! 😊\n\nType 1 to Browse Services\nType 2 to Talk to Our Team\nType MENU to start over!";
   }
 }
 
