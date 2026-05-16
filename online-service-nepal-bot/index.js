@@ -22,11 +22,11 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemi
 const AI_SYSTEM_PROMPT = `You are a helpful assistant for "Online Service Nepal" - a digital services business in Nepal.
 
 PRODUCTS & PRICES:
-1. Google INR Redeem Code
+1. Google Play Redeem Code (INDIA REGION ONLY)
    - Trial Pack: INR 10 @ NRs.25 (Recommended for first time users to check if their account works)
    - Regular: 50 INR @ NRs.95, 100 INR @ NRs.185, 150 INR @ NRs.275, 200 INR @ NRs.365, 250 INR @ NRs.455, 300 INR @ NRs.545, 500 INR @ NRs.885, 1000 INR @ NRs.1720
 
-2. Apple iTunes Redeem Code
+2. Apple iTunes Redeem Code (INDIA REGION ONLY)
    - 100 INR @ NRs.185, 150 INR @ NRs.275, 200 INR @ NRs.365, 250 INR @ NRs.455, 300 INR @ NRs.545, 500 INR @ NRs.885, 1000 INR @ NRs.1720
 
 3. Indian Mobile Recharge
@@ -46,9 +46,15 @@ IMPORTANT RULES:
 - NEVER discuss unrelated topics
 - Always end with a helpful navigation hint
 
+REGION RESTRICTIONS:
+- Google Play codes work ONLY with INDIA-based Google Play accounts
+- Apple iTunes codes work ONLY with INDIA-based Apple ID accounts
+- If customer asks for OTHER regions (US, UK, Nepal, Australia, etc.) → Reply: "Sorry, we only sell codes for India region. 😊 Our Google Play and Apple iTunes codes work only with India-based accounts. Type MENU to see our services!"
+
 SPECIFIC FAQ ANSWERS:
 - If asked about delivery time / "kati time lagxa" / "kahile painxa" → Reply: "Payment confirm bhayepachi 10-15 minutes bhitra tapaiko order complete hunxa! ⏱️ Type MENU if you need anything else 😊"
 - If asked if Google India code works in Nepal / "Nepal ma kaam garxa?" → Reply: "Hami recommend garxau ki pahila hamro Trial Pack try garnus (INR 10 @ NRs.25) to check if your Google Play account works in Nepal! Type 3 to order Trial Pack 😊"
+- If asked about OTHER regions (US/UK/Nepal/etc codes) / "US ko code xa?" / "America ko lagi?" → Reply: "Sorry, we only sell codes for India region. 😊 Our codes work only with India-based accounts. Type MENU to see our services!"
 - If customer says thanks/ok/bye → Reply warmly and say "Type MENU if you need anything else! 😊"
 - If question is completely unrelated → Reply: "Sorry, I can only help with our digital services! 😊 Type 1 to Browse Services or Type 2 to Talk to Our Team"
 - If asked about price → Show relevant price list and guide to order`;
@@ -298,11 +304,11 @@ async function handleMessage(senderId, message) {
     if (text === '1') {
       userState[senderId] = {
         waitingForPayment: true,
-        lastOrder: 'Google INR Trial Pack - INR 10 @ NRs.25',
-        orderSummary: '🎮 Google INR Redeem Code\n▪️ Trial Pack - INR 10 @ NRs.25'
+        lastOrder: 'Google Play Trial Pack - INR 10 @ NRs.25',
+        orderSummary: '🎮 Google Play Redeem Code (India Region)\n▪️ Trial Pack - INR 10 @ NRs.25'
       };
       return sendPaymentMenu(senderId,
-        `🎮 Google INR - Trial Pack\n✅ Selected: INR 10 @ NRs.25\n\nSelect payment method:`
+        `🎮 Google Play - Trial Pack\n✅ Selected: INR 10 @ NRs.25\n\nSelect payment method:`
       );
     }
     if (text === '0') { delete userState[senderId]; return sendGoogleMenuText(senderId); }
@@ -326,12 +332,12 @@ async function handleMessage(senderId, message) {
     if (selected) {
       userState[senderId] = {
         waitingForPayment: true,
-        lastOrder: `Google INR Regular - ${selected}`,
-        orderSummary: `🎮 Google INR Redeem Code\n▪️ ${selected}`
+        lastOrder: `Google Play Regular - ${selected}`,
+        orderSummary: `🎮 Google Play Redeem Code (India Region)\n▪️ ${selected}`
       };
       return sendPaymentMenu(senderId,
-        `🎮 Google INR - Regular Pack\n✅ Selected: ${selected}\n\n` +
-        `⚠️ Requires India based Google Play account.\n\nSelect payment method:`
+        `🎮 Google Play - Regular Pack\n✅ Selected: ${selected}\n\n` +
+        `⚠️ India Region Only - Requires India-based Google Play account.\n\nSelect payment method:`
       );
     }
     return sendGoogleRegularPack(senderId);
@@ -354,11 +360,11 @@ async function handleMessage(senderId, message) {
       userState[senderId] = {
         waitingForPayment: true,
         lastOrder: `Apple iTunes - ${selected}`,
-        orderSummary: `🍎 Apple iTunes Redeem Code\n▪️ ${selected}`
+        orderSummary: `🍎 Apple iTunes Redeem Code (India Region)\n▪️ ${selected}`
       };
       return sendPaymentMenu(senderId,
         `🍎 Apple iTunes Redeem Code\n✅ Selected: ${selected}\n\n` +
-        `⚠️ Requires India based Apple ID account.\n\nSelect payment method:`
+        `⚠️ India Region Only - Requires India-based Apple ID account.\n\nSelect payment method:`
       );
     }
     return sendAppleMenuText(senderId);
@@ -492,8 +498,8 @@ function sendServicesMenu(senderId) {
   sendText(senderId,
     `🛒 Our Services\n\n` +
     `Please reply with a number:\n\n` +
-    `3️⃣  Google INR Redeem Code 🎮\n` +
-    `4️⃣  Apple iTunes Redeem Code 🍎\n` +
+    `3️⃣  Google Play Redeem Code (India Region) 🎮\n` +
+    `4️⃣  Apple iTunes Redeem Code (India Region) 🍎\n` +
     `5️⃣  Indian Mobile Recharge 📱\n` +
     `6️⃣  Document Translation 📄\n\n` +
     `0️⃣  Back to Main Menu`
@@ -514,12 +520,13 @@ function sendSupportMenu(senderId) {
 }
 
 // ==============================
-// 🎮 Google INR Menu (Pack Selection)
+// 🎮 Google Play Redeem Code Menu
 // ==============================
 function sendGoogleMenuText(senderId) {
   userState[senderId] = { waitingForGooglePack: true };
   sendText(senderId,
-    `🎮 Google INR Redeem Code\n\n` +
+    `🎮 Google Play Redeem Code\n` +
+    `⚠️ India Region Only\n\n` +
     `Please select a pack:\n\n` +
     `1️⃣  Trial Pack\n` +
     `2️⃣  Regular Pack\n\n` +
@@ -533,13 +540,14 @@ function sendGoogleMenuText(senderId) {
 function sendGoogleTrialPack(senderId) {
   userState[senderId] = { waitingForGoogleTrial: true };
   sendText(senderId,
-    `🎮 Google INR Redeem Code\n` +
+    `🎮 Google Play Redeem Code\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `⚠️ Before Buying This!!!\n\n` +
     `Try our exclusive "Trial Pack" to check\n` +
     `your Google Indian Play Account is\n` +
     `working in Nepal.\n\n` +
     `▪️ INR 10 for NRs. 25/-\n\n` +
+    `⚠️ India Region Only - Requires India-based Google Play account\n` +
     `🚫 Non-Refundable.\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `1️⃣  Proceed to Buy\n` +
@@ -553,7 +561,7 @@ function sendGoogleTrialPack(senderId) {
 function sendGoogleRegularPack(senderId) {
   userState[senderId] = { waitingForGoogleRegular: true };
   sendText(senderId,
-    `🎮 Google INR Redeem Code\n` +
+    `🎮 Google Play Redeem Code\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `🔸 Regular Pack\n\n` +
     `Reply with number to select:\n\n` +
@@ -565,7 +573,7 @@ function sendGoogleRegularPack(senderId) {
     `6️⃣  300 INR @ NRs.545\n` +
     `7️⃣  500 INR @ NRs.885\n` +
     `8️⃣  1000 INR @ NRs.1720\n\n` +
-    `⚠️ Requires India based Google Play account.\n` +
+    `⚠️ India Region Only - Requires India-based Google Play account\n` +
     `🚫 Non-Refundable.\n` +
     `━━━━━━━━━━━━━━━━━━━━\n\n` +
     `0️⃣  Back`
@@ -578,7 +586,8 @@ function sendGoogleRegularPack(senderId) {
 function sendAppleMenuText(senderId) {
   userState[senderId] = { waitingForApple: true };
   sendText(senderId,
-    `🍎 Apple iTunes Redeem Code\n\n` +
+    `🍎 Apple iTunes Redeem Code\n` +
+    `⚠️ India Region Only\n\n` +
     `Reply with number to select:\n\n` +
     `1️⃣  100 INR @ NRs.185\n` +
     `2️⃣  150 INR @ NRs.275\n` +
@@ -587,7 +596,7 @@ function sendAppleMenuText(senderId) {
     `5️⃣  300 INR @ NRs.545\n` +
     `6️⃣  500 INR @ NRs.885\n` +
     `7️⃣  1000 INR @ NRs.1720\n\n` +
-    `⚠️ Requires India based Apple ID account.\n\n` +
+    `⚠️ Requires India-based Apple ID account\n\n` +
     `0️⃣  Back to Services`
   );
 }
