@@ -51,7 +51,7 @@ SPECIFIC FAQ ANSWERS:
 - If asked if Google India code works in Nepal / "Nepal ma kaam garxa?" → Reply: "Hami recommend garxau ki pahila hamro Trial Pack try garnus (INR 10 @ NRs.25) to check if your Google Play account works in Nepal! Type 3 to order Trial Pack 😊"
 - If customer says thanks/ok/bye → Reply warmly and say "Type MENU if you need anything else! 😊"
 - If question is completely unrelated → Reply: "Sorry, I can only help with our digital services! 😊 Type 1 to Browse Services or Type 2 to Talk to Our Team"
-- If asked about price → Show relevant price list and guide to order';'
+- If asked about price → Show relevant price list and guide to order`;
 
 // ==============================
 // 💳 QR CODE URLs
