@@ -14,7 +14,7 @@ const ADMIN_ID = process.env.ADMIN_ID;
 const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
 const SESSION_TIMEOUT = 45 * 60 * 1000; // 45 minutes
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // ==============================
 // 🤖 Gemini AI System Prompt
