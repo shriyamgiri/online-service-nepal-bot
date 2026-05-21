@@ -18,8 +18,8 @@ const GEMINI_KEY        = process.env.GEMINI_API_KEY;
 // ==============================
 // 🤖 Gemini Models
 // ==============================
-const GEMINI_PRIMARY = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-const GEMINI_BACKUP  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_KEY}`;
+const GEMINI_PRIMARY = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+const GEMINI_BACKUP  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`;
 
 // ==============================
 // 🤖 AI System Prompt
