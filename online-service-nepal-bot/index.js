@@ -180,7 +180,7 @@ async function getAIReply(senderId, userMessage) {
     console.log(`⚠️ Primary Gemini failed (${status}) — trying backup...`);
 
     // ─── Wait 1 second then try Backup Model (Flash-Lite) ───
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 3000));
     try {
       const backupResponse = await axios.post(GEMINI_BACKUP, {
         contents: [{ parts: [{ text: prompt }] }]
@@ -192,12 +192,8 @@ async function getAIReply(senderId, userMessage) {
     } catch (backupErr) {
       console.error('❌ Both Gemini models failed');
       // Notify admin
-      sendText(ADMIN_ID,
-        `⚠️ Both AI models failed!\n\n` +
-        `👤 Customer ID: ${senderId}\n` +
-        `💬 Message: ${userMessage}\n\n` +
-        `Please reply manually!`
-      );
+      // Just log it — no Facebook notification
+      console.log(`⚠️ Both AI failed! Customer: ${senderId} | Message: ${userMessage}`);
       return getVariation(VARIATIONS.agentReply, senderId);
     }
   }
