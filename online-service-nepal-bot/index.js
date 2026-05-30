@@ -6,35 +6,31 @@ const app = express();
 app.use(bodyParser.json());
 
 // ==============================
-// 🔧 SETTINGS (Environment Variables)
+// 🔧 SETTINGS
 // ==============================
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = 'onlineservicenepal123';
 const ADMIN_ID          = process.env.ADMIN_ID;
 const REVIEW_LINK       = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
-const SESSION_TIMEOUT   = 45 * 60 * 1000;
+const SESSION_TIMEOUT   = 45 * 60 * 1000; // 45 minutes
 const GEMINI_KEY        = process.env.GEMINI_API_KEY;
+const GEMINI_URL        = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
 
 // ==============================
-// 🤖 Gemini Models
+// 🤖 Gemini Intent Classifier Prompt
 // ==============================
-const GEMINI_PRIMARY = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
-const GEMINI_BACKUP  = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_KEY}`;
+const INTENT_PROMPT = `You are an intent classifier for "Online Service Nepal".
+Classify the customer message into EXACTLY ONE of these intents:
+GOOGLE_PRICE - asking about Google INR Redeem Code price or want to buy
+APPLE_PRICE - asking about Apple iTunes price or want to buy
+RECHARGE - asking about Indian Mobile Recharge
+TRANSLATION - asking about Document Translation
+FAQ_DELIVERY - asking about delivery time or how long it takes
+FAQ_NEPAL - asking if Google/Apple codes work in Nepal
+FAQ_PAYMENT - asking about payment methods (eSewa/Khalti/Bank)
+OUT_OF_SCOPE - anything not related to our digital services
 
-// ==============================
-// 🤖 AI System Prompt
-// ==============================
-const AI_SYSTEM_PROMPT = `You are a friendly assistant for "Online Service Nepal" in Nepal.
-PRODUCTS: 1)Google INR Codes(Trial:INR10=NRs25, Regular:50-1000INR) 2)Apple iTunes(100-1000INR) 3)Indian Mobile Recharge(Airtel/Jio/Vi/BSNL) 4)Document Translation
-PAYMENT: eSewa/Khalti/Bank. DELIVERY: 10-15 mins after payment.
-RULES:
-- Max 3 lines per reply
-- Same language as customer (Nepali/English/mixed)
-- Only discuss our services
-- NEVER repeat the same response you gave before
-- Vary your tone and wording naturally each time
-- Be conversational and human-like
-FAQ: delivery time → "10-15 mins after payment ⏱️". works in Nepal → "Try Trial Pack first! Type 3". unrelated → "Sorry, only digital services! Type 1 or 2". thanks/ok → warm varied acknowledgement.`;
+Reply with ONLY the intent word. Nothing else. No explanation.`;
 
 // ==============================
 // 💳 QR CODE URLs
@@ -51,34 +47,6 @@ const QR_CODES = {
 const userState    = {};
 const userLastSeen = {};
 const knownUsers   = {};
-const lastAICall   = {};
-const replyHistory = {}; // Tracks last 2 replies per user
-
-// ==============================
-// 💬 Response Variation Pools
-// ==============================
-const VARIATIONS = {
-  agentReply: [
-    `Our team will be right with you! Please wait a moment 🙏\n\n— Online Service Nepal`,
-    `We've received your message! An agent will assist you shortly 😊\n\n— Online Service Nepal`,
-    `Hang tight! Our team is on it and will reach out soon 🙏\n\n— Online Service Nepal`,
-    `Got your message! Someone from our team will be with you shortly 😊\n\n— Online Service Nepal`
-  ],
-  error: [
-    `Sorry, having a little trouble right now! 😊\nType 1 to Browse Services\nType 2 to Talk to Our Team`,
-    `Oops! Something went wrong on my end 😅\nType MENU to start over or Type 2 for support!`,
-    `My bad! Let me get you some help 😊\nType 1 for Services or Type 2 for our Team!`
-  ]
-};
-
-function getVariation(pool, userId) {
-  const history = replyHistory[userId] || [];
-  const available = pool.filter(r => !history.includes(r));
-  const options = available.length > 0 ? available : pool;
-  const picked = options[Math.floor(Math.random() * options.length)];
-  replyHistory[userId] = [...history.slice(-2), picked];
-  return picked;
-}
 
 // ==============================
 // 💓 Health Check
@@ -147,59 +115,6 @@ function getGreeting() {
 }
 
 // ==============================
-// 🤖 Gemini AI — Dual Fallback + No Repetition
-// ==============================
-async function getAIReply(senderId, userMessage) {
-  // Rate limit: 1 AI call per 5 seconds per user
-  const now = Date.now();
-  const lastCall = lastAICall[senderId] || 0;
-  if (now - lastCall < 5000) {
-    return getVariation(VARIATIONS.error, senderId);
-  }
-  lastAICall[senderId] = now;
-
-  // Include last reply in prompt to avoid repetition
-  const history = replyHistory[senderId] || [];
-  const historyNote = history.length > 0
-    ? `\nYour last replies were: "${history.join('" and "')}". DO NOT repeat these.`
-    : '';
-
-  const prompt = AI_SYSTEM_PROMPT + historyNote + '\n\nCustomer: ' + userMessage;
-
-  // ─── Try Primary Model (Gemini 2.0 Flash) ───
-  try {
-    const response = await axios.post(GEMINI_PRIMARY, {
-      contents: [{ parts: [{ text: prompt }] }]
-    });
-    const reply = response.data.candidates[0].content.parts[0].text.trim();
-    replyHistory[senderId] = [...history.slice(-2), reply];
-    console.log('✅ Primary Gemini replied');
-    return reply;
-  } catch (err) {
-    const status = err.response?.status;
-    console.log(`⚠️ Primary Gemini failed (${status}) — trying backup...`);
-
-    // ─── Wait 1 second then try Backup Model (Flash-Lite) ───
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    try {
-      const backupResponse = await axios.post(GEMINI_BACKUP, {
-        contents: [{ parts: [{ text: prompt }] }]
-      });
-      const reply = backupResponse.data.candidates[0].content.parts[0].text.trim();
-      replyHistory[senderId] = [...history.slice(-2), reply];
-      console.log('✅ Backup Gemini replied');
-      return reply;
-    } catch (backupErr) {
-      console.error('❌ Both Gemini models failed');
-      // Notify admin
-      // Just log it — no Facebook notification
-      console.log(`⚠️ Both AI failed! Customer: ${senderId} | Message: ${userMessage}`);
-      return getVariation(VARIATIONS.agentReply, senderId);
-    }
-  }
-}
-
-// ==============================
 // 💬 Handle Messages
 // ==============================
 async function handleMessage(senderId, message) {
@@ -208,7 +123,7 @@ async function handleMessage(senderId, message) {
 
   console.log('👤 Sender:', senderId, '| Msg:', rawText);
 
-  // ─── Image/Screenshot received ───
+  // ─── Image/Screenshot ───
   if (message.attachments && message.attachments[0].type === 'image') {
     if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) return;
     userState[senderId] = { ...userState[senderId], waitingForPaymentConfirm: true };
@@ -241,19 +156,24 @@ async function handleMessage(senderId, message) {
     }
     if (text === '2') {
       delete userState[senderId].waitingForPaymentConfirm;
-      return sendText(senderId, `No problem! 😊\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬`);
+      return sendText(senderId,
+        `No problem! 😊\n\n` +
+        `1️⃣  Browse Services 🛒\n` +
+        `2️⃣  Talk to Our Team 💬`
+      );
     }
     return sendText(senderId, `Please reply:\n1️⃣  Yes\n2️⃣  No`);
   }
 
-  // ─── After payment — Gemini handles smartly ───
+  // ─── After payment — allow follow up freely ───
   if (userState[senderId] && userState[senderId].waitingForOrder) {
     if (['menu', 'hi', 'hello', 'start'].includes(text)) {
       delete userState[senderId];
       return sendWelcome(senderId);
     }
-    const aiReply = await getAIReply(senderId, rawText);
-    return sendText(senderId, aiReply);
+    // Silent — Admin handles from inbox
+    console.log(`📩 Follow up from ${senderId}: ${rawText} — waiting for admin reply`);
+    return;
   }
 
   // ─── Admin COMPLETE command ───
@@ -280,6 +200,13 @@ async function handleMessage(senderId, message) {
     return sendText(senderId,
       `👋 Welcome back!\n\n${getGreeting()}! Your previous session has expired.\n\nLet's start fresh! 😊`
     ).then(() => sendWelcome(senderId));
+  }
+
+  // ─── Waiting for human (out of scope) — SILENT ───
+  if (userState[senderId] && userState[senderId].waitingForHuman) {
+    // Complete silence — admin replies from inbox
+    console.log(`🔕 Silent mode for ${senderId}: ${rawText}`);
+    return;
   }
 
   // ─── Waiting for mobile number ───
@@ -312,7 +239,7 @@ async function handleMessage(senderId, message) {
     return sendPaymentMenu(senderId, 'Please reply 1, 2 or 3:');
   }
 
-  // ─── Google Pack Type ───
+  // ─── Google Pack ───
   if (userState[senderId] && userState[senderId].waitingForGooglePack) {
     if (text === '1') return sendGoogleTrialPack(senderId);
     if (text === '2') return sendGoogleRegularPack(senderId);
@@ -349,7 +276,9 @@ async function handleMessage(senderId, message) {
         lastOrder: `Google INR Regular - ${selected}`,
         orderSummary: `🎮 Google INR Redeem Code\n▪️ ${selected}`
       };
-      return sendPaymentMenu(senderId, `🎮 Regular Pack ✅ ${selected}\n\n⚠️ Requires India based Google Play account.\n\nSelect payment:`);
+      return sendPaymentMenu(senderId,
+        `🎮 Regular Pack ✅ ${selected}\n\n⚠️ Requires India based Google Play account.\n\nSelect payment:`
+      );
     }
     return sendGoogleRegularPack(senderId);
   }
@@ -369,7 +298,9 @@ async function handleMessage(senderId, message) {
         lastOrder: `Apple iTunes - ${selected}`,
         orderSummary: `🍎 Apple iTunes Redeem Code\n▪️ ${selected}`
       };
-      return sendPaymentMenu(senderId, `🍎 Apple iTunes ✅ ${selected}\n\n⚠️ Requires India based Apple ID.\n\nSelect payment:`);
+      return sendPaymentMenu(senderId,
+        `🍎 Apple iTunes ✅ ${selected}\n\n⚠️ Requires India based Apple ID.\n\nSelect payment:`
+      );
     }
     return sendAppleMenuText(senderId);
   }
@@ -409,9 +340,12 @@ async function handleMessage(senderId, message) {
   // ─── Support query ───
   if (userState[senderId] && userState[senderId].waitingForSupport) {
     delete userState[senderId];
+    userState[senderId] = { waitingForHuman: true };
     return sendText(senderId,
-      `✅ Thank you for reaching out!\n\n💬 Your message has been received.\n\n` +
-      `Our team will contact you shortly! 🙏\n\n— Online Service Nepal\n\nReply MENU to go back.`
+      `✅ Thank you for reaching out!\n\n` +
+      `💬 Your message has been received.\n\n` +
+      `Our team will contact you shortly! 🙏\n\n` +
+      `— Online Service Nepal`
     );
   }
 
@@ -424,9 +358,9 @@ async function handleMessage(senderId, message) {
   if (text === '5') return sendRechargeMenuText(senderId);
   if (text === '6') return sendTranslationMenuText(senderId);
 
-  // ─── AI Fallback ───
-  const aiReply = await getAIReply(senderId, rawText);
-  sendText(senderId, aiReply);
+  // ─── Smart Intent Classification via Gemini ───
+  const intent = await classifyIntent(rawText);
+  return handleIntent(senderId, intent);
 }
 
 // ==============================
@@ -435,7 +369,7 @@ async function handleMessage(senderId, message) {
 function handlePostback(senderId) { sendWelcome(senderId); }
 
 // ==============================
-// 👋 Welcome
+// 👋 Welcome — Structured (No AI)
 // ==============================
 function sendWelcome(senderId) {
   const greeting    = getGreeting();
@@ -451,7 +385,9 @@ function sendWelcome(senderId) {
 
 function sendMainMenu(senderId) {
   userState[senderId] = {};
-  sendText(senderId, `How can we help you today?\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2...`);
+  sendText(senderId,
+    `How can we help you today?\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2...`
+  );
 }
 
 function sendServicesMenu(senderId) {
@@ -464,12 +400,16 @@ function sendServicesMenu(senderId) {
 
 function sendSupportMenu(senderId) {
   userState[senderId] = { waitingForSupport: true };
-  sendText(senderId, `💬 Talk to Our Team\n\nPlease describe your query below:\n\nType your message now... 👇`);
+  sendText(senderId,
+    `💬 Talk to Our Team\n\nPlease describe your query below\nand we will get back to you shortly:\n\nType your message now... 👇`
+  );
 }
 
 function sendGoogleMenuText(senderId) {
   userState[senderId] = { waitingForGooglePack: true };
-  sendText(senderId, `🎮 Google INR Redeem Code\n\n1️⃣  Trial Pack\n2️⃣  Regular Pack\n\n0️⃣  Back to Services`);
+  sendText(senderId,
+    `🎮 Google INR Redeem Code\n\n1️⃣  Trial Pack\n2️⃣  Regular Pack\n\n0️⃣  Back to Services`
+  );
 }
 
 function sendGoogleTrialPack(senderId) {
@@ -477,7 +417,8 @@ function sendGoogleTrialPack(senderId) {
   sendText(senderId,
     `🎮 Google INR Redeem Code\n━━━━━━━━━━━━━━━━━━━━\n⚠️ Before Buying This!!!\n\n` +
     `Try our exclusive "Trial Pack" to check your Google Indian Play Account is working in Nepal.\n\n` +
-    `▪️ INR 10 for NRs. 25/-\n\n🚫 Non-Refundable.\n━━━━━━━━━━━━━━━━━━━━\n\n1️⃣  Proceed to Buy\n0️⃣  Back`
+    `▪️ INR 10 for NRs. 25/-\n\n🚫 Non-Refundable.\n━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `1️⃣  Proceed to Buy\n0️⃣  Back`
   );
 }
 
@@ -502,19 +443,24 @@ function sendAppleMenuText(senderId) {
 
 function sendRechargeMenuText(senderId) {
   userState[senderId] = { waitingForOperator: true };
-  sendText(senderId, `📱 Indian Mobile Recharge\n\n1️⃣  Airtel\n2️⃣  Jio\n3️⃣  Vi\n4️⃣  BSNL\n\n0️⃣  Back to Services`);
+  sendText(senderId,
+    `📱 Indian Mobile Recharge\n\n1️⃣  Airtel\n2️⃣  Jio\n3️⃣  Vi\n4️⃣  BSNL\n\n0️⃣  Back to Services`
+  );
 }
 
 function sendTranslationMenuText(senderId) {
   userState[senderId] = { waitingForDoc: true };
   sendText(senderId,
     `📄 Official Document Translation\n\n1️⃣  Citizenship\n2️⃣  Educational Documents\n3️⃣  Land Owner Certificate\n` +
-    `4️⃣  Tax Clearance\n5️⃣  Property Tax Receipt\n6️⃣  Verification From Ward Office\n7️⃣  Others\n\n0️⃣  Back to Services`
+    `4️⃣  Tax Clearance\n5️⃣  Property Tax Receipt\n6️⃣  Verification From Ward Office\n7️⃣  Others\n\n` +
+    `0️⃣  Back to Services`
   );
 }
 
 function sendPaymentMenu(senderId, intro) {
-  sendText(senderId, `${intro}\n\n1️⃣  eSewa\n2️⃣  Khalti\n3️⃣  Bank Transfer\n\n0️⃣  Back to Main Menu`);
+  sendText(senderId,
+    `${intro}\n\n1️⃣  eSewa\n2️⃣  Khalti\n3️⃣  Bank Transfer\n\n0️⃣  Back to Main Menu`
+  );
 }
 
 function sendPaymentDetails(senderId, method, qrUrl, orderSummary) {
@@ -528,6 +474,59 @@ function sendPaymentDetails(senderId, method, qrUrl, orderSummary) {
   return sendText(senderId,
     `✅ Order Summary:\n${orderSummary}\n\n💳 Bank Transfer\n\nOur team will send bank details shortly! 🙏`
   );
+}
+
+// ==============================
+// 🤖 Gemini Intent Classifier
+// ==============================
+async function classifyIntent(userMessage) {
+  if (!GEMINI_KEY) return 'OUT_OF_SCOPE';
+  try {
+    const response = await axios.post(GEMINI_URL, {
+      contents: [{ parts: [{ text: INTENT_PROMPT + '\n\nCustomer message: ' + userMessage }] }]
+    });
+    const intent = response.data.candidates[0].content.parts[0].text.trim().toUpperCase();
+    console.log(`🤖 Intent classified: ${intent}`);
+    const validIntents = ['GOOGLE_PRICE','APPLE_PRICE','RECHARGE','TRANSLATION','FAQ_DELIVERY','FAQ_NEPAL','FAQ_PAYMENT','OUT_OF_SCOPE'];
+    return validIntents.includes(intent) ? intent : 'OUT_OF_SCOPE';
+  } catch (err) {
+    console.error('❌ Gemini error:', err.response?.status, err.response?.data?.error?.message);
+    return 'OUT_OF_SCOPE';
+  }
+}
+
+// ==============================
+// 🎯 Handle Intent
+// ==============================
+async function handleIntent(senderId, intent) {
+  switch(intent) {
+    case 'GOOGLE_PRICE':
+      return sendGoogleMenuText(senderId);
+    case 'APPLE_PRICE':
+      return sendAppleMenuText(senderId);
+    case 'RECHARGE':
+      return sendRechargeMenuText(senderId);
+    case 'TRANSLATION':
+      return sendTranslationMenuText(senderId);
+    case 'FAQ_DELIVERY':
+      return sendText(senderId,
+        `⏱️ After payment confirmation from our end, it takes 10-15 minutes to complete your order!\n\nType MENU to browse our services 😊`
+      );
+    case 'FAQ_NEPAL':
+      return sendText(senderId,
+        `Great question! 😊\n\nWe recommend trying our exclusive Trial Pack first to check if your Google Indian Play Account works in Nepal!\n\n▪️ INR 10 @ NRs.25 only\n\nType 3 to order Trial Pack now! 🎮`
+      );
+    case 'FAQ_PAYMENT':
+      return sendText(senderId,
+        `💳 We accept the following payment methods:\n\n✅ eSewa\n✅ Khalti\n✅ Bank Transfer\n\nType 1 to Browse Services and proceed to payment! 😊`
+      );
+    case 'OUT_OF_SCOPE':
+    default:
+      userState[senderId] = { waitingForHuman: true };
+      return sendText(senderId,
+        `Thanks for your message! 🙏\n\nOur team will get back to you shortly.\n\n— Online Service Nepal\n\nReply MENU anytime to browse our services 😊`
+      );
+  }
 }
 
 function sendText(senderId, text) {
