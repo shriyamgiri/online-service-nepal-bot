@@ -12,12 +12,12 @@ const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = 'onlineservicenepal123';
 const ADMIN_ID          = process.env.ADMIN_ID;
 const REVIEW_LINK       = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
-const SESSION_TIMEOUT   = 45 * 60 * 1000; // 45 minutes
+const SESSION_TIMEOUT   = 45 * 60 * 1000;
 const GEMINI_KEY        = process.env.GEMINI_API_KEY;
-const GEMINI_URL        = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+const GEMINI_URL        = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
 
 // ==============================
-// 🤖 Gemini Intent Classifier Prompt
+// 🤖 Gemini Intent Prompt
 // ==============================
 const INTENT_PROMPT = `You are an intent classifier for "Online Service Nepal".
 Classify the customer message into EXACTLY ONE of these intents:
@@ -28,9 +28,10 @@ TRANSLATION - asking about Document Translation
 FAQ_DELIVERY - asking about delivery time or how long it takes
 FAQ_NEPAL - asking if Google/Apple codes work in Nepal
 FAQ_PAYMENT - asking about payment methods (eSewa/Khalti/Bank)
+SPOTIFY - asking about Spotify subscription
+KUKUFM - asking about KuKu FM subscription
 OUT_OF_SCOPE - anything not related to our digital services
-
-Reply with ONLY the intent word. Nothing else. No explanation.`;
+Reply with ONLY the intent word. Nothing else.`;
 
 // ==============================
 // 💳 QR CODE URLs
@@ -39,6 +40,30 @@ const QR_CODES = {
   esewa:  'https://drive.google.com/uc?export=view&id=1NoIUX3PqTLzIc2kx9lH7NxwxljqxR9cb',
   khalti: 'https://drive.google.com/uc?export=view&id=1N67wvplKTe7ttjHXsZRLMVIOII94gd3H',
   bank:   'BANK_QR_COMING_SOON'
+};
+
+// ==============================
+// 💰 Price Lists
+// ==============================
+const GOOGLE_PRICES = {
+  '1': { label: '50 INR @ NRs.95',    inr: 50  },
+  '2': { label: '100 INR @ NRs.185',  inr: 100 },
+  '3': { label: '150 INR @ NRs.275',  inr: 150 },
+  '4': { label: '200 INR @ NRs.365',  inr: 200 },
+  '5': { label: '250 INR @ NRs.455',  inr: 250 },
+  '6': { label: '300 INR @ NRs.545',  inr: 300 },
+  '7': { label: '500 INR @ NRs.885',  inr: 500 },
+  '8': { label: '1000 INR @ NRs.1720',inr: 1000}
+};
+
+const APPLE_PRICES = {
+  '1': { label: '100 INR @ NRs.185',  inr: 100 },
+  '2': { label: '150 INR @ NRs.275',  inr: 150 },
+  '3': { label: '200 INR @ NRs.365',  inr: 200 },
+  '4': { label: '250 INR @ NRs.455',  inr: 250 },
+  '5': { label: '300 INR @ NRs.545',  inr: 300 },
+  '6': { label: '500 INR @ NRs.885',  inr: 500 },
+  '7': { label: '1000 INR @ NRs.1720',inr: 1000}
 };
 
 // ==============================
@@ -51,9 +76,7 @@ const knownUsers   = {};
 // ==============================
 // 💓 Health Check
 // ==============================
-app.get('/health', (req, res) => {
-  res.status(200).send('✅ Bot is Running!');
-});
+app.get('/health', (req, res) => res.status(200).send('✅ Bot is Running!'));
 
 // ==============================
 // ✅ Webhook Verification
@@ -115,6 +138,89 @@ function getGreeting() {
 }
 
 // ==============================
+// 🔢 Smart Price Matcher (Point 3)
+// ==============================
+function matchPrice(input, priceList) {
+  // Extract number from input (handles "INR 200", "200 INR", "200", "send 200", etc.)
+  const numbers = input.match(/\d+/g);
+  if (!numbers) return null;
+  const inputNum = parseInt(numbers[0]);
+  // First check if it's a menu number (1-8)
+  const directKey = String(inputNum);
+  if (priceList[directKey]) return { key: directKey, ...priceList[directKey] };
+  // Then check if it matches an INR value
+  for (const [key, val] of Object.entries(priceList)) {
+    if (val.inr === inputNum) return { key, ...val };
+  }
+  return null;
+}
+
+// ==============================
+// 🤖 Gemini Intent Classifier
+// ==============================
+async function classifyIntent(userMessage) {
+  if (!GEMINI_KEY) return 'OUT_OF_SCOPE';
+  try {
+    const response = await axios.post(GEMINI_URL, {
+      contents: [{ parts: [{ text: INTENT_PROMPT + '\n\nCustomer: ' + userMessage }] }]
+    });
+    const intent = response.data.candidates[0].content.parts[0].text.trim().toUpperCase();
+    const valid  = ['GOOGLE_PRICE','APPLE_PRICE','RECHARGE','TRANSLATION',
+                    'FAQ_DELIVERY','FAQ_NEPAL','FAQ_PAYMENT','SPOTIFY','KUKUFM','OUT_OF_SCOPE'];
+    const result = valid.includes(intent) ? intent : 'OUT_OF_SCOPE';
+    console.log(`🤖 Intent: ${result}`);
+    return result;
+  } catch (err) {
+    console.error('❌ Gemini error:', err.response?.status);
+    return 'OUT_OF_SCOPE';
+  }
+}
+
+// ==============================
+// 🎯 Handle Intent
+// ==============================
+async function handleIntent(senderId, intent) {
+  switch(intent) {
+    case 'GOOGLE_PRICE':
+      return sendGoogleMenuText(senderId);
+    case 'APPLE_PRICE':
+      return sendAppleMenuText(senderId);
+    case 'RECHARGE':
+      return sendRechargeMenuText(senderId);
+    case 'TRANSLATION':
+      return sendTranslationMenuText(senderId);
+    case 'FAQ_DELIVERY':
+      return sendText(senderId,
+        `⏱️ After payment confirmation from our end, it takes 10-15 minutes to complete your order!\n\nType MENU to browse our services 😊`
+      );
+    case 'FAQ_NEPAL':
+      return sendText(senderId,
+        `Great question! 😊\n\nWe recommend trying our exclusive Trial Pack first to check if your Google Indian Play Account works in Nepal!\n\n▪️ INR 10 @ NRs.25 only\n\nType 3 → then 1 to order Trial Pack now! 🎮`
+      );
+    case 'FAQ_PAYMENT':
+      return sendText(senderId,
+        `💳 We accept the following payment methods:\n\n✅ eSewa\n✅ Khalti\n✅ Bank Transfer\n\nType 1 to Browse Services and proceed to payment! 😊`
+      );
+    case 'SPOTIFY':
+      userState[senderId] = { waitingForHuman: true };
+      return sendText(senderId,
+        `🎵 Great news! We are offering Spotify subscriptions!\n\nOur team will get back to you shortly with the available plans and pricing! 🙏\n\n— Online Service Nepal`
+      );
+    case 'KUKUFM':
+      userState[senderId] = { waitingForHuman: true };
+      return sendText(senderId,
+        `🎙️Great news! We are offering KuKu FM subscriptions!\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
+      );
+    case 'OUT_OF_SCOPE':
+    default:
+      userState[senderId] = { waitingForHuman: true };
+      return sendText(senderId,
+        `Thanks for your message! 🙏\n\nOur team will get back to you shortly.\n\n— Online Service Nepal\n\nReply MENU anytime to browse our services 😊`
+      );
+  }
+}
+
+// ==============================
 // 💬 Handle Messages
 // ==============================
 async function handleMessage(senderId, message) {
@@ -128,10 +234,7 @@ async function handleMessage(senderId, message) {
     if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) return;
     userState[senderId] = { ...userState[senderId], waitingForPaymentConfirm: true };
     return sendText(senderId,
-      `📸 We received your image!\n\n` +
-      `Is this a payment screenshot?\n\n` +
-      `1️⃣  Yes — Payment Screenshot\n` +
-      `2️⃣  No — Something Else`
+      `📸 We received your image!\n\nIs this a payment screenshot?\n\n1️⃣  Yes — Payment Screenshot\n2️⃣  No — Something Else`
     );
   }
 
@@ -140,39 +243,30 @@ async function handleMessage(senderId, message) {
     if (text === '1') {
       const lastOrder = userState[senderId].lastOrder || 'your order';
       userState[senderId] = { waitingForOrder: true, lastOrder };
-      sendText(ADMIN_ID,
-        `💰 Payment Confirmed!\n\n` +
-        `👤 Customer ID: ${senderId}\n` +
-        `🛒 Order: ${lastOrder}\n\n` +
-        `⬇️ To complete:\nCOMPLETE ${senderId} ${lastOrder}`
-      );
+      // ✅ Point 1 Fix — Log for admin instead of FB message
+      console.log(`\n💰 ====== PAYMENT CONFIRMED ======`);
+      console.log(`👤 Customer ID: ${senderId}`);
+      console.log(`🛒 Order: ${lastOrder}`);
+      console.log(`⬇️  COMPLETE ${senderId} ${lastOrder}`);
+      console.log(`================================\n`);
       return sendText(senderId,
-        `📸 Payment Screenshot Received!\n\n` +
-        `✅ Thank you for your payment!\n\n` +
-        `Our team will verify and process\nyour order shortly! 🙏\n\n` +
-        `— Online Service Nepal\n\n` +
-        `Feel free to send any follow up message! 😊`
+        `📸 Payment Screenshot Received!\n\n✅ Thank you for your payment!\n\nOur team will verify and process your order shortly! 🙏\n\n— Online Service Nepal\n\nFeel free to send any follow up message! 😊`
       );
     }
     if (text === '2') {
       delete userState[senderId].waitingForPaymentConfirm;
-      return sendText(senderId,
-        `No problem! 😊\n\n` +
-        `1️⃣  Browse Services 🛒\n` +
-        `2️⃣  Talk to Our Team 💬`
-      );
+      return sendText(senderId, `No problem! 😊\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬`);
     }
     return sendText(senderId, `Please reply:\n1️⃣  Yes\n2️⃣  No`);
   }
 
-  // ─── After payment — allow follow up freely ───
+  // ─── After payment — free follow up ───
   if (userState[senderId] && userState[senderId].waitingForOrder) {
     if (['menu', 'hi', 'hello', 'start'].includes(text)) {
       delete userState[senderId];
       return sendWelcome(senderId);
     }
-    // Silent — Admin handles from inbox
-    console.log(`📩 Follow up from ${senderId}: ${rawText} — waiting for admin reply`);
+    console.log(`📩 Follow up from ${senderId}: ${rawText}`);
     return;
   }
 
@@ -184,10 +278,7 @@ async function handleMessage(senderId, message) {
     if (customerId && orderDetails) {
       delete userState[customerId];
       sendText(customerId,
-        `✅ Your Order is Completed!\n\n📦 ${orderDetails}\n\n` +
-        `Thank you for choosing Online Service Nepal! 🙏\n\n` +
-        `⭐ Happy with our service? Leave us a review:\n👉 ${REVIEW_LINK}\n\n` +
-        `Your review helps us serve you better! 🇳🇵`
+        `✅ Your Order is Completed!\n\n📦 ${orderDetails}\n\nThank you for choosing Online Service Nepal! 🙏\n\n⭐ Happy with our service? Leave us a review:\n👉 ${REVIEW_LINK}\n\nYour review helps us serve you better! 🇳🇵`
       );
       return sendText(ADMIN_ID, `✅ Order completed for: ${customerId}`);
     }
@@ -202,10 +293,9 @@ async function handleMessage(senderId, message) {
     ).then(() => sendWelcome(senderId));
   }
 
-  // ─── Waiting for human (out of scope) — SILENT ───
+  // ─── Silent mode — waiting for human ───
   if (userState[senderId] && userState[senderId].waitingForHuman) {
-    // Complete silence — admin replies from inbox
-    console.log(`🔕 Silent mode for ${senderId}: ${rawText}`);
+    console.log(`🔕 Silent for ${senderId}: ${rawText}`);
     return;
   }
 
@@ -214,8 +304,7 @@ async function handleMessage(senderId, message) {
     const operator = userState[senderId].operator;
     userState[senderId] = { waitingForPlan: true, operator, phone: rawText };
     return sendText(senderId,
-      `📱 Mobile Number: ${rawText}\n\nPlease type your preferred recharge plan:\n\n` +
-      `Example:\n▪️ 28 days 1.5GB/day\n▪️ 239 plan\n\nType your plan below:`
+      `📱 Mobile Number: ${rawText}\n\nPlease type your preferred recharge plan:\n\nExample:\n▪️ 28 days 1.5GB/day\n▪️ 239 plan\n\nType your plan below:`
     );
   }
 
@@ -224,8 +313,7 @@ async function handleMessage(senderId, message) {
     const { operator, phone } = userState[senderId];
     delete userState[senderId];
     return sendText(senderId,
-      `✅ Order Received!\n\n📶 Operator: ${operator}\n📞 Mobile: ${phone}\n📋 Plan: ${rawText}\n\n` +
-      `Our team will contact you shortly! 🙏\n\n— Online Service Nepal\n\nReply MENU anytime.`
+      `✅ Order Received!\n\n📶 Operator: ${operator}\n📞 Mobile: ${phone}\n📋 Plan: ${rawText}\n\nOur team will contact you shortly! 🙏\n\n— Online Service Nepal\n\nReply MENU anytime.`
     );
   }
 
@@ -261,48 +349,63 @@ async function handleMessage(senderId, message) {
     return sendGoogleTrialPack(senderId);
   }
 
-  // ─── Google Regular ───
+  // ─── Google Regular — Smart Price Matching (Point 3) ───
   if (userState[senderId] && userState[senderId].waitingForGoogleRegular) {
-    const prices = {
-      '1':'50 INR @ NRs.95','2':'100 INR @ NRs.185','3':'150 INR @ NRs.275',
-      '4':'200 INR @ NRs.365','5':'250 INR @ NRs.455','6':'300 INR @ NRs.545',
-      '7':'500 INR @ NRs.885','8':'1000 INR @ NRs.1720'
-    };
     if (text === '0') { delete userState[senderId]; return sendGoogleMenuText(senderId); }
-    const selected = prices[text];
-    if (selected) {
+    const match = matchPrice(rawText, GOOGLE_PRICES);
+    if (match) {
       userState[senderId] = {
         waitingForPayment: true,
-        lastOrder: `Google INR Regular - ${selected}`,
-        orderSummary: `🎮 Google INR Redeem Code\n▪️ ${selected}`
+        lastOrder: `Google INR Regular - ${match.label}`,
+        orderSummary: `🎮 Google INR Redeem Code\n▪️ ${match.label}`
       };
       return sendPaymentMenu(senderId,
-        `🎮 Regular Pack ✅ ${selected}\n\n⚠️ Requires India based Google Play account.\n\nSelect payment:`
+        `🎮 Regular Pack ✅ ${match.label}\n\n⚠️ Requires India based Google Play account.\n\nSelect payment:`
       );
     }
-    return sendGoogleRegularPack(senderId);
+    // No match — show clear hint
+    return sendText(senderId,
+      `❓ Please type the number to select:\n\n` +
+      `1️⃣  50 INR  = NRs.95\n` +
+      `2️⃣  100 INR = NRs.185\n` +
+      `3️⃣  150 INR = NRs.275\n` +
+      `4️⃣  200 INR = NRs.365\n` +
+      `5️⃣  250 INR = NRs.455\n` +
+      `6️⃣  300 INR = NRs.545\n` +
+      `7️⃣  500 INR = NRs.885\n` +
+      `8️⃣  1000 INR = NRs.1720\n\n` +
+      `💡 Just type 1, 2, 3... to continue!\n\n` +
+      `0️⃣  Back`
+    );
   }
 
-  // ─── Apple ───
+  // ─── Apple — Smart Price Matching (Point 3) ───
   if (userState[senderId] && userState[senderId].waitingForApple) {
-    const prices = {
-      '1':'100 INR @ NRs.185','2':'150 INR @ NRs.275','3':'200 INR @ NRs.365',
-      '4':'250 INR @ NRs.455','5':'300 INR @ NRs.545','6':'500 INR @ NRs.885',
-      '7':'1000 INR @ NRs.1720'
-    };
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
-    const selected = prices[text];
-    if (selected) {
+    const match = matchPrice(rawText, APPLE_PRICES);
+    if (match) {
       userState[senderId] = {
         waitingForPayment: true,
-        lastOrder: `Apple iTunes - ${selected}`,
-        orderSummary: `🍎 Apple iTunes Redeem Code\n▪️ ${selected}`
+        lastOrder: `Apple iTunes - ${match.label}`,
+        orderSummary: `🍎 Apple iTunes Redeem Code\n▪️ ${match.label}`
       };
       return sendPaymentMenu(senderId,
-        `🍎 Apple iTunes ✅ ${selected}\n\n⚠️ Requires India based Apple ID.\n\nSelect payment:`
+        `🍎 Apple iTunes ✅ ${match.label}\n\n⚠️ Requires India based Apple ID.\n\nSelect payment:`
       );
     }
-    return sendAppleMenuText(senderId);
+    // No match — show clear hint
+    return sendText(senderId,
+      `❓ Please type the number to select:\n\n` +
+      `1️⃣  100 INR = NRs.185\n` +
+      `2️⃣  150 INR = NRs.275\n` +
+      `3️⃣  200 INR = NRs.365\n` +
+      `4️⃣  250 INR = NRs.455\n` +
+      `5️⃣  300 INR = NRs.545\n` +
+      `6️⃣  500 INR = NRs.885\n` +
+      `7️⃣  1000 INR = NRs.1720\n\n` +
+      `💡 Just type 1, 2, 3... to continue!\n\n` +
+      `0️⃣  Back`
+    );
   }
 
   // ─── Operator ───
@@ -330,22 +433,17 @@ async function handleMessage(senderId, message) {
     if (doc) {
       delete userState[senderId];
       return sendText(senderId,
-        `📄 Document Translation\n✅ Selected: ${doc}\n\n` +
-        `Our team will contact you shortly! 🙏\n\n— Online Service Nepal\n\nReply MENU to go back.`
+        `📄 Document Translation\n✅ Selected: ${doc}\n\nOur team will contact you shortly! 🙏\n\n— Online Service Nepal\n\nReply MENU to go back.`
       );
     }
     return sendTranslationMenuText(senderId);
   }
 
-  // ─── Support query ───
+  // ─── Support query (Point 2 Fix) ───
   if (userState[senderId] && userState[senderId].waitingForSupport) {
-    delete userState[senderId];
     userState[senderId] = { waitingForHuman: true };
     return sendText(senderId,
-      `✅ Thank you for reaching out!\n\n` +
-      `💬 Your message has been received.\n\n` +
-      `Our team will contact you shortly! 🙏\n\n` +
-      `— Online Service Nepal`
+      `✅ Thank you for reaching out!\n\n💬 Our team has received your message and will get back to you shortly! 🙏\n\n— Online Service Nepal`
     );
   }
 
@@ -358,7 +456,7 @@ async function handleMessage(senderId, message) {
   if (text === '5') return sendRechargeMenuText(senderId);
   if (text === '6') return sendTranslationMenuText(senderId);
 
-  // ─── Smart Intent Classification via Gemini ───
+  // ─── Smart Intent Classification ───
   const intent = await classifyIntent(rawText);
   return handleIntent(senderId, intent);
 }
@@ -369,7 +467,7 @@ async function handleMessage(senderId, message) {
 function handlePostback(senderId) { sendWelcome(senderId); }
 
 // ==============================
-// 👋 Welcome — Structured (No AI)
+// 👋 Welcome
 // ==============================
 function sendWelcome(senderId) {
   const greeting    = getGreeting();
@@ -385,40 +483,33 @@ function sendWelcome(senderId) {
 
 function sendMainMenu(senderId) {
   userState[senderId] = {};
+  sendText(senderId, `How can we help you today?\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2...`);
+}
+
+// ✅ Point 2 Fix — More welcoming support menu
+function sendSupportMenu(senderId) {
+  userState[senderId] = { waitingForSupport: true };
   sendText(senderId,
-    `How can we help you today?\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2...`
+    `💬 Sure! Our team is here to help! 😊\n\nPlease describe what you need\nand we'll get back to you shortly!\n\nType your message now... 👇`
   );
 }
 
 function sendServicesMenu(senderId) {
   userState[senderId] = { inServices: true };
   sendText(senderId,
-    `🛒 Our Services\n\n3️⃣  Google INR Redeem Code 🎮\n4️⃣  Apple iTunes Redeem Code 🍎\n` +
-    `5️⃣  Indian Mobile Recharge 📱\n6️⃣  Document Translation 📄\n\n0️⃣  Back to Main Menu`
-  );
-}
-
-function sendSupportMenu(senderId) {
-  userState[senderId] = { waitingForSupport: true };
-  sendText(senderId,
-    `💬 Talk to Our Team\n\nPlease describe your query below\nand we will get back to you shortly:\n\nType your message now... 👇`
+    `🛒 Our Services\n\n3️⃣  Google INR Redeem Code 🎮\n4️⃣  Apple iTunes Redeem Code 🍎\n5️⃣  Indian Mobile Recharge 📱\n6️⃣  Document Translation 📄\n\n0️⃣  Back to Main Menu`
   );
 }
 
 function sendGoogleMenuText(senderId) {
   userState[senderId] = { waitingForGooglePack: true };
-  sendText(senderId,
-    `🎮 Google INR Redeem Code\n\n1️⃣  Trial Pack\n2️⃣  Regular Pack\n\n0️⃣  Back to Services`
-  );
+  sendText(senderId, `🎮 Google INR Redeem Code\n\n1️⃣  Trial Pack\n2️⃣  Regular Pack\n\n0️⃣  Back to Services`);
 }
 
 function sendGoogleTrialPack(senderId) {
   userState[senderId] = { waitingForGoogleTrial: true };
   sendText(senderId,
-    `🎮 Google INR Redeem Code\n━━━━━━━━━━━━━━━━━━━━\n⚠️ Before Buying This!!!\n\n` +
-    `Try our exclusive "Trial Pack" to check your Google Indian Play Account is working in Nepal.\n\n` +
-    `▪️ INR 10 for NRs. 25/-\n\n🚫 Non-Refundable.\n━━━━━━━━━━━━━━━━━━━━\n\n` +
-    `1️⃣  Proceed to Buy\n0️⃣  Back`
+    `🎮 Google INR Redeem Code\n━━━━━━━━━━━━━━━━━━━━\n⚠️ Before Buying This!!!\n\nTry our exclusive "Trial Pack" to check your Google Indian Play Account is working in Nepal.\n\n▪️ INR 10 for NRs. 25/-\n\n🚫 Non-Refundable.\n━━━━━━━━━━━━━━━━━━━━\n\n1️⃣  Proceed to Buy\n0️⃣  Back`
   );
 }
 
@@ -426,8 +517,9 @@ function sendGoogleRegularPack(senderId) {
   userState[senderId] = { waitingForGoogleRegular: true };
   sendText(senderId,
     `🎮 Google INR Redeem Code\n━━━━━━━━━━━━━━━━━━━━\n🔸 Regular Pack\n\n` +
-    `1️⃣  50 INR @ NRs.95\n2️⃣  100 INR @ NRs.185\n3️⃣  150 INR @ NRs.275\n4️⃣  200 INR @ NRs.365\n` +
-    `5️⃣  250 INR @ NRs.455\n6️⃣  300 INR @ NRs.545\n7️⃣  500 INR @ NRs.885\n8️⃣  1000 INR @ NRs.1720\n\n` +
+    `1️⃣  50 INR  = NRs.95\n2️⃣  100 INR = NRs.185\n3️⃣  150 INR = NRs.275\n4️⃣  200 INR = NRs.365\n` +
+    `5️⃣  250 INR = NRs.455\n6️⃣  300 INR = NRs.545\n7️⃣  500 INR = NRs.885\n8️⃣  1000 INR = NRs.1720\n\n` +
+    `💡 Type the number (1-8) to select\n` +
     `⚠️ Requires India based Google Play account.\n🚫 Non-Refundable.\n━━━━━━━━━━━━━━━━━━━━\n\n0️⃣  Back`
   );
 }
@@ -435,98 +527,40 @@ function sendGoogleRegularPack(senderId) {
 function sendAppleMenuText(senderId) {
   userState[senderId] = { waitingForApple: true };
   sendText(senderId,
-    `🍎 Apple iTunes Redeem Code\n\n1️⃣  100 INR @ NRs.185\n2️⃣  150 INR @ NRs.275\n3️⃣  200 INR @ NRs.365\n` +
-    `4️⃣  250 INR @ NRs.455\n5️⃣  300 INR @ NRs.545\n6️⃣  500 INR @ NRs.885\n7️⃣  1000 INR @ NRs.1720\n\n` +
+    `🍎 Apple iTunes Redeem Code\n\n` +
+    `1️⃣  100 INR = NRs.185\n2️⃣  150 INR = NRs.275\n3️⃣  200 INR = NRs.365\n` +
+    `4️⃣  250 INR = NRs.455\n5️⃣  300 INR = NRs.545\n6️⃣  500 INR = NRs.885\n7️⃣  1000 INR = NRs.1720\n\n` +
+    `💡 Type the number (1-7) to select\n` +
     `⚠️ Requires India based Apple ID.\n\n0️⃣  Back to Services`
   );
 }
 
 function sendRechargeMenuText(senderId) {
   userState[senderId] = { waitingForOperator: true };
-  sendText(senderId,
-    `📱 Indian Mobile Recharge\n\n1️⃣  Airtel\n2️⃣  Jio\n3️⃣  Vi\n4️⃣  BSNL\n\n0️⃣  Back to Services`
-  );
+  sendText(senderId, `📱 Indian Mobile Recharge\n\n1️⃣  Airtel\n2️⃣  Jio\n3️⃣  Vi\n4️⃣  BSNL\n\n0️⃣  Back to Services`);
 }
 
 function sendTranslationMenuText(senderId) {
   userState[senderId] = { waitingForDoc: true };
   sendText(senderId,
     `📄 Official Document Translation\n\n1️⃣  Citizenship\n2️⃣  Educational Documents\n3️⃣  Land Owner Certificate\n` +
-    `4️⃣  Tax Clearance\n5️⃣  Property Tax Receipt\n6️⃣  Verification From Ward Office\n7️⃣  Others\n\n` +
-    `0️⃣  Back to Services`
+    `4️⃣  Tax Clearance\n5️⃣  Property Tax Receipt\n6️⃣  Verification From Ward Office\n7️⃣  Others\n\n0️⃣  Back to Services`
   );
 }
 
 function sendPaymentMenu(senderId, intro) {
-  sendText(senderId,
-    `${intro}\n\n1️⃣  eSewa\n2️⃣  Khalti\n3️⃣  Bank Transfer\n\n0️⃣  Back to Main Menu`
-  );
+  sendText(senderId, `${intro}\n\n1️⃣  eSewa\n2️⃣  Khalti\n3️⃣  Bank Transfer\n\n0️⃣  Back to Main Menu`);
 }
 
 function sendPaymentDetails(senderId, method, qrUrl, orderSummary) {
   if (qrUrl !== 'BANK_QR_COMING_SOON') {
     return sendText(senderId,
-      `✅ Order Summary:\n${orderSummary}\n\n💳 Payment: ${method}\n\n` +
-      `📸 Tap link to view QR & scan to pay:\n👉 ${qrUrl}\n\n` +
-      `After payment send screenshot 🙏\n\n— Online Service Nepal`
+      `✅ Order Summary:\n${orderSummary}\n\n💳 Payment: ${method}\n\n📸 Tap link to view QR & scan to pay:\n👉 ${qrUrl}\n\nAfter payment send screenshot 🙏\n\n— Online Service Nepal`
     );
   }
   return sendText(senderId,
     `✅ Order Summary:\n${orderSummary}\n\n💳 Bank Transfer\n\nOur team will send bank details shortly! 🙏`
   );
-}
-
-// ==============================
-// 🤖 Gemini Intent Classifier
-// ==============================
-async function classifyIntent(userMessage) {
-  if (!GEMINI_KEY) return 'OUT_OF_SCOPE';
-  try {
-    const response = await axios.post(GEMINI_URL, {
-      contents: [{ parts: [{ text: INTENT_PROMPT + '\n\nCustomer message: ' + userMessage }] }]
-    });
-    const intent = response.data.candidates[0].content.parts[0].text.trim().toUpperCase();
-    console.log(`🤖 Intent classified: ${intent}`);
-    const validIntents = ['GOOGLE_PRICE','APPLE_PRICE','RECHARGE','TRANSLATION','FAQ_DELIVERY','FAQ_NEPAL','FAQ_PAYMENT','OUT_OF_SCOPE'];
-    return validIntents.includes(intent) ? intent : 'OUT_OF_SCOPE';
-  } catch (err) {
-    console.error('❌ Gemini error:', err.response?.status, err.response?.data?.error?.message);
-    return 'OUT_OF_SCOPE';
-  }
-}
-
-// ==============================
-// 🎯 Handle Intent
-// ==============================
-async function handleIntent(senderId, intent) {
-  switch(intent) {
-    case 'GOOGLE_PRICE':
-      return sendGoogleMenuText(senderId);
-    case 'APPLE_PRICE':
-      return sendAppleMenuText(senderId);
-    case 'RECHARGE':
-      return sendRechargeMenuText(senderId);
-    case 'TRANSLATION':
-      return sendTranslationMenuText(senderId);
-    case 'FAQ_DELIVERY':
-      return sendText(senderId,
-        `⏱️ After payment confirmation from our end, it takes 10-15 minutes to complete your order!\n\nType MENU to browse our services 😊`
-      );
-    case 'FAQ_NEPAL':
-      return sendText(senderId,
-        `Great question! 😊\n\nWe recommend trying our exclusive Trial Pack first to check if your Google Indian Play Account works in Nepal!\n\n▪️ INR 10 @ NRs.25 only\n\nType 3 to order Trial Pack now! 🎮`
-      );
-    case 'FAQ_PAYMENT':
-      return sendText(senderId,
-        `💳 We accept the following payment methods:\n\n✅ eSewa\n✅ Khalti\n✅ Bank Transfer\n\nType 1 to Browse Services and proceed to payment! 😊`
-      );
-    case 'OUT_OF_SCOPE':
-    default:
-      userState[senderId] = { waitingForHuman: true };
-      return sendText(senderId,
-        `Thanks for your message! 🙏\n\nOur team will get back to you shortly.\n\n— Online Service Nepal\n\nReply MENU anytime to browse our services 😊`
-      );
-  }
 }
 
 function sendText(senderId, text) {
