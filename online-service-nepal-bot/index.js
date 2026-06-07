@@ -21,8 +21,9 @@ const GEMINI_URL        = `https://generativelanguage.googleapis.com/v1beta/mode
 // ==============================
 const INTENT_PROMPT = `You are an intent classifier for "Online Service Nepal".
 Classify the customer message into EXACTLY ONE of these intents:
-GOOGLE_PRICE - asking about Google INR Redeem Code price or want to buy
-APPLE_PRICE - asking about Apple iTunes price or want to buy
+GOOGLE_PRICE - ONLY if specifically asking about Google Play/Google INR codes (words: google, play store, google gift)
+APPLE_PRICE - ONLY if specifically asking about Apple/iTunes/iOS codes (words: apple, itunes, ios, iphone, ipad, itunes wala, apple wala)
+SERVICES - asking about gift cards in general without specifying Google or Apple, or asking what products/services are available
 RECHARGE - asking about Indian Mobile Recharge
 TRANSLATION - asking about Document Translation
 FAQ_DELIVERY - asking about delivery time or how long it takes
@@ -216,7 +217,7 @@ async function classifyIntent(userMessage) {
       contents: [{ parts: [{ text: INTENT_PROMPT + '\n\nCustomer: ' + userMessage }] }]
     });
     const intent = response.data.candidates[0].content.parts[0].text.trim().toUpperCase();
-    const valid  = ['GOOGLE_PRICE','APPLE_PRICE','RECHARGE','TRANSLATION',
+    const valid  = ['GOOGLE_PRICE','APPLE_PRICE','SERVICES','RECHARGE','TRANSLATION',
                     'FAQ_DELIVERY','FAQ_NEPAL','FAQ_PAYMENT','SPOTIFY','KUKUFM','OUT_OF_SCOPE'];
     const result = valid.includes(intent) ? intent : 'OUT_OF_SCOPE';
     console.log(`🤖 Intent: ${result}`);
@@ -232,6 +233,8 @@ async function classifyIntent(userMessage) {
 // ==============================
 async function handleIntent(senderId, intent) {
   switch(intent) {
+    case 'SERVICES':
+      return sendServicesMenu(senderId);
     case 'GOOGLE_PRICE':
       return sendGoogleMenuText(senderId);
     case 'APPLE_PRICE':
@@ -386,6 +389,18 @@ async function handleMessage(senderId, message) {
   // ─── Google Pack ───
   if (userState[senderId] && userState[senderId].waitingForGooglePack) {
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
+    // Check if user switched to Apple
+    const appleWords = ['apple','itunes','ios','iphone','ipad'];
+    if (appleWords.some(w => text.includes(w))) {
+      delete userState[senderId];
+      return sendAppleMenuText(senderId);
+    }
+    // Check if user asking for all services
+    const serviceWords = ['gift card','service','product','other','else'];
+    if (serviceWords.some(w => text.includes(w))) {
+      delete userState[senderId];
+      return sendServicesMenu(senderId);
+    }
     const gPack = matchText(rawText, GOOGLE_PACK_KEYWORDS) || text;
     if (gPack === '1') return sendGoogleTrialPack(senderId);
     if (gPack === '2') return sendGoogleRegularPack(senderId);
@@ -439,6 +454,12 @@ async function handleMessage(senderId, message) {
   // ─── Apple — Smart Price Matching (Point 3) ───
   if (userState[senderId] && userState[senderId].waitingForApple) {
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
+    // Check if user switched to Google
+    const googleWords = ['google','play','gplay'];
+    if (googleWords.some(w => text.includes(w))) {
+      delete userState[senderId];
+      return sendGoogleMenuText(senderId);
+    }
     const match = matchPrice(rawText, APPLE_PRICES);
     if (match) {
       userState[senderId] = {
