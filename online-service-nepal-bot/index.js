@@ -156,6 +156,57 @@ function matchPrice(input, priceList) {
 }
 
 // ==============================
+// 🔤 Smart Text Matcher (Fix 2)
+// ==============================
+function matchText(input, options) {
+  const t = input.toLowerCase().trim();
+  for (const [key, keywords] of Object.entries(options)) {
+    if (keywords.some(k => t.includes(k))) return key;
+  }
+  return null;
+}
+
+const MAIN_MENU_KEYWORDS = {
+  '1': ['browse','service','product','buy','order','shop','purchase','google','apple','recharge','document','translate'],
+  '2': ['team','support','help','talk','agent','human','chat','connect','query','question','problem']
+};
+
+const SERVICES_KEYWORDS = {
+  '3': ['google','play','gplay','inr','redeem','gift card'],
+  '4': ['apple','itunes','ios','iphone','ipad'],
+  '5': ['recharge','mobile','airtel','jio','vi','bsnl','sim','phone','number','data'],
+  '6': ['document','translate','translation','citizenship','nagarikta','land','tax','ward','educational']
+};
+
+const GOOGLE_PACK_KEYWORDS = {
+  '1': ['trial','test','try','check','small','first','10 inr','inr 10'],
+  '2': ['regular','main','full','big','large','normal']
+};
+
+const OPERATOR_KEYWORDS = {
+  '1': ['airtel'],
+  '2': ['jio'],
+  '3': ['vi','vodafone','idea'],
+  '4': ['bsnl']
+};
+
+const PAYMENT_KEYWORDS = {
+  '1': ['esewa','e-sewa','e sewa'],
+  '2': ['khalti'],
+  '3': ['bank','transfer','deposit','account']
+};
+
+const DOC_KEYWORDS = {
+  '1': ['citizenship','nagarikta','citizen'],
+  '2': ['education','educational','degree','certificate','school','college','academic'],
+  '3': ['land','jagga','owner','property owner'],
+  '4': ['tax clearance','tax clear'],
+  '5': ['property tax','property'],
+  '6': ['ward','office','verification','verify'],
+  '7': ['other','others','else','different','misc']
+};
+
+// ==============================
 // 🤖 Gemini Intent Classifier
 // ==============================
 async function classifyIntent(userMessage) {
@@ -204,12 +255,12 @@ async function handleIntent(senderId, intent) {
     case 'SPOTIFY':
       userState[senderId] = { waitingForHuman: true };
       return sendText(senderId,
-        `🎵 Great news! We are offering Spotify subscriptions!\n\nOur team will get back to you shortly with the available plans and pricing! 🙏\n\n— Online Service Nepal`
+        `🎵 We currently don't offer Spotify subscriptions.\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
       );
     case 'KUKUFM':
       userState[senderId] = { waitingForHuman: true };
       return sendText(senderId,
-        `🎙️Great news! We are offering KuKu FM subscriptions!\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
+        `🎙️ We currently don't offer KuKu FM subscriptions.\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
       );
     case 'OUT_OF_SCOPE':
     default:
@@ -240,20 +291,24 @@ async function handleMessage(senderId, message) {
 
   // ─── Payment screenshot confirmation ───
   if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) {
-    if (text === '1') {
+    const isYes = ['1','yes','yeah','yep','hoo','ho','ha','yes it is','payment','confirm','haan','ya','y','ok','okay','sure'].includes(text);
+    const isNo  = ['2','no','nope','nahi','na','n','not','no it is not','nope'].includes(text);
+    if (isYes) {
       const lastOrder = userState[senderId].lastOrder || 'your order';
       userState[senderId] = { waitingForOrder: true, lastOrder };
-      // ✅ Point 1 Fix — Log for admin instead of FB message
-      console.log(`\n💰 ====== PAYMENT CONFIRMED ======`);
-      console.log(`👤 Customer ID: ${senderId}`);
-      console.log(`🛒 Order: ${lastOrder}`);
-      console.log(`⬇️  COMPLETE ${senderId} ${lastOrder}`);
-      console.log(`================================\n`);
+      // ✅ Fix 1 — Notify admin + log as backup
+      console.log(`\n💰 PAYMENT: Customer ${senderId} | Order: ${lastOrder}`);
+      sendText(ADMIN_ID,
+        `💰 Payment Confirmed!\n\n` +
+        `👤 Customer ID: ${senderId}\n` +
+        `🛒 Order: ${lastOrder}\n\n` +
+        `⬇️ To complete:\nCOMPLETE ${senderId} ${lastOrder}`
+      ).catch(() => console.log(`⚠️ Admin notify failed — check logs`));
       return sendText(senderId,
         `📸 Payment Screenshot Received!\n\n✅ Thank you for your payment!\n\nOur team will verify and process your order shortly! 🙏\n\n— Online Service Nepal\n\nFeel free to send any follow up message! 😊`
       );
     }
-    if (text === '2') {
+    if (isNo) {
       delete userState[senderId].waitingForPaymentConfirm;
       return sendText(senderId, `No problem! 😊\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬`);
     }
@@ -320,18 +375,20 @@ async function handleMessage(senderId, message) {
   // ─── Payment method ───
   if (userState[senderId] && userState[senderId].waitingForPayment) {
     const { orderSummary } = userState[senderId];
-    if (text === '1') { delete userState[senderId]; return sendPaymentDetails(senderId, 'eSewa', QR_CODES.esewa, orderSummary); }
-    if (text === '2') { delete userState[senderId]; return sendPaymentDetails(senderId, 'Khalti', QR_CODES.khalti, orderSummary); }
-    if (text === '3') { delete userState[senderId]; return sendPaymentDetails(senderId, 'Bank Transfer', QR_CODES.bank, orderSummary); }
     if (text === '0') { delete userState[senderId]; return sendMainMenu(senderId); }
+    const payKey = matchText(rawText, PAYMENT_KEYWORDS) || text;
+    if (payKey === '1') { delete userState[senderId]; return sendPaymentDetails(senderId, 'eSewa', QR_CODES.esewa, orderSummary); }
+    if (payKey === '2') { delete userState[senderId]; return sendPaymentDetails(senderId, 'Khalti', QR_CODES.khalti, orderSummary); }
+    if (payKey === '3') { delete userState[senderId]; return sendPaymentDetails(senderId, 'Bank Transfer', QR_CODES.bank, orderSummary); }
     return sendPaymentMenu(senderId, 'Please reply 1, 2 or 3:');
   }
 
   // ─── Google Pack ───
   if (userState[senderId] && userState[senderId].waitingForGooglePack) {
-    if (text === '1') return sendGoogleTrialPack(senderId);
-    if (text === '2') return sendGoogleRegularPack(senderId);
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
+    const gPack = matchText(rawText, GOOGLE_PACK_KEYWORDS) || text;
+    if (gPack === '1') return sendGoogleTrialPack(senderId);
+    if (gPack === '2') return sendGoogleRegularPack(senderId);
     return sendGoogleMenuText(senderId);
   }
 
@@ -412,7 +469,8 @@ async function handleMessage(senderId, message) {
   if (userState[senderId] && userState[senderId].waitingForOperator) {
     const operators = {'1':'Airtel','2':'Jio','3':'Vi','4':'BSNL'};
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
-    const operator = operators[text];
+    const opKey = matchText(rawText, OPERATOR_KEYWORDS) || text;
+    const operator = operators[opKey];
     if (operator) {
       delete userState[senderId];
       userState[senderId] = { waitingForPhone: true, operator };
@@ -429,7 +487,8 @@ async function handleMessage(senderId, message) {
       '6':'Verification From Ward Office','7':'Others'
     };
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
-    const doc = docs[text];
+    const docKey = matchText(rawText, DOC_KEYWORDS) || text;
+    const doc = docs[docKey];
     if (doc) {
       delete userState[senderId];
       return sendText(senderId,
@@ -449,8 +508,19 @@ async function handleMessage(senderId, message) {
 
   // ─── Main triggers ───
   if (['hi','hello','namaste','hey','start','menu'].includes(text)) return sendWelcome(senderId);
-  if (text === '1') return sendServicesMenu(senderId);
-  if (text === '2') return sendSupportMenu(senderId);
+
+  // Smart text matching for main menu
+  const mainKey = matchText(rawText, MAIN_MENU_KEYWORDS) || text;
+  if (mainKey === '1' || text === '1') {
+    // Smart match for services
+    const svcKey = matchText(rawText, SERVICES_KEYWORDS);
+    if (svcKey === '3') return sendGoogleMenuText(senderId);
+    if (svcKey === '4') return sendAppleMenuText(senderId);
+    if (svcKey === '5') return sendRechargeMenuText(senderId);
+    if (svcKey === '6') return sendTranslationMenuText(senderId);
+    return sendServicesMenu(senderId);
+  }
+  if (mainKey === '2' || text === '2') return sendSupportMenu(senderId);
   if (text === '3') return sendGoogleMenuText(senderId);
   if (text === '4') return sendAppleMenuText(senderId);
   if (text === '5') return sendRechargeMenuText(senderId);
