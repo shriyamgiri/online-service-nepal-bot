@@ -258,12 +258,12 @@ async function handleIntent(senderId, intent) {
     case 'SPOTIFY':
       userState[senderId] = { waitingForHuman: true };
       return sendText(senderId,
-        `🎵 We currently don't offer Spotify subscriptions.\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
+        `🎵 We do offer Spotify subscriptions.\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
       );
     case 'KUKUFM':
       userState[senderId] = { waitingForHuman: true };
       return sendText(senderId,
-        `🎙️ We currently don't offer KuKu FM subscriptions.\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
+        `🎙️ We do offer KuKu FM subscriptions.\n\nOur team will get back to you shortly with more information! 🙏\n\n— Online Service Nepal`
       );
     case 'OUT_OF_SCOPE':
     default:
