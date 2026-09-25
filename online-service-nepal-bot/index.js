@@ -9,12 +9,16 @@ app.use(bodyParser.json());
 // 🔧 SETTINGS
 // ==============================
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const VERIFY_TOKEN      = 'onlineservicenepal123';
-const ADMIN_ID          = process.env.ADMIN_ID;
-const REVIEW_LINK       = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
-const SESSION_TIMEOUT   = 45 * 60 * 1000;
-const GEMINI_KEY        = process.env.GEMINI_API_KEY;
-const GEMINI_URL        = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+const VERIFY_TOKEN = 'onlineservicenepal123';
+const ADMIN_ID = process.env.ADMIN_ID;
+const REVIEW_LINK = 'https://www.facebook.com/onlineservicenepalNo.1/reviews';
+const SESSION_TIMEOUT = 45 * 60 * 1000;
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+
+// 🛒 Your Lovable website base URL (set in .env as WEBSITE_URL)
+// Example: https://your-lovable-site.lovable.app
+const WEBSITE_URL = process.env.WEBSITE_URL || 'https://your-lovable-site.com';
 
 // ==============================
 // 🤖 Gemini Intent Prompt
@@ -38,46 +42,46 @@ Reply with ONLY the intent word. Nothing else.`;
 // 💳 QR CODE URLs
 // ==============================
 const QR_CODES = {
-  esewa:  'https://drive.google.com/uc?export=view&id=1NoIUX3PqTLzIc2kx9lH7NxwxljqxR9cb',
+  esewa: 'https://drive.google.com/uc?export=view&id=1NoIUX3PqTLzIc2kx9lH7NxwxljqxR9cb',
   khalti: 'https://drive.google.com/uc?export=view&id=1N67wvplKTe7ttjHXsZRLMVIOII94gd3H',
-  bank:   'BANK_QR_COMING_SOON'
+  bank: 'BANK_QR_COMING_SOON'
 };
 
 // ==============================
 // 💰 Price Lists
 // ==============================
 const GOOGLE_PRICES = {
-  '1': { label: '50 INR  = NRs.95',    inr: 50   },
-  '2': { label: '100 INR = NRs.185',   inr: 100  },
-  '3': { label: '150 INR = NRs.275',   inr: 150  },
-  '4': { label: '200 INR = NRs.365',   inr: 200  },
-  '5': { label: '250 INR = NRs.455',   inr: 250  },
-  '6': { label: '300 INR = NRs.545',   inr: 300  },
-  '7': { label: '500 INR = NRs.885',   inr: 500  },
+  '1': { label: '50 INR  = NRs.95', inr: 50 },
+  '2': { label: '100 INR = NRs.185', inr: 100 },
+  '3': { label: '150 INR = NRs.275', inr: 150 },
+  '4': { label: '200 INR = NRs.365', inr: 200 },
+  '5': { label: '250 INR = NRs.455', inr: 250 },
+  '6': { label: '300 INR = NRs.545', inr: 300 },
+  '7': { label: '500 INR = NRs.885', inr: 500 },
   '8': { label: '1000 INR = NRs.1720', inr: 1000 }
 };
 
 const APPLE_PRICES = {
-  '1': { label: '100 INR = NRs.185',   inr: 100  },
-  '2': { label: '150 INR = NRs.275',   inr: 150  },
-  '3': { label: '200 INR = NRs.365',   inr: 200  },
-  '4': { label: '250 INR = NRs.455',   inr: 250  },
-  '5': { label: '300 INR = NRs.545',   inr: 300  },
-  '6': { label: '500 INR = NRs.885',   inr: 500  },
+  '1': { label: '100 INR = NRs.185', inr: 100 },
+  '2': { label: '150 INR = NRs.275', inr: 150 },
+  '3': { label: '200 INR = NRs.365', inr: 200 },
+  '4': { label: '250 INR = NRs.455', inr: 250 },
+  '5': { label: '300 INR = NRs.545', inr: 300 },
+  '6': { label: '500 INR = NRs.885', inr: 500 },
   '7': { label: '1000 INR = NRs.1720', inr: 1000 }
 };
 
 const SPOTIFY_PLANS = {
-  '1': { label: '1 Month Plan = NRs.239',  nrs: 239  },
+  '1': { label: '1 Month Plan = NRs.239', nrs: 239 },
   '2': { label: '1 Year Plan  = NRs.2369', nrs: 2369 }
 };
 
 // ==============================
 // 💾 State & Tracking
 // ==============================
-const userState    = {};
+const userState = {};
 const userLastSeen = {};
-const knownUsers   = {};
+const knownUsers = {};
 
 // ==============================
 // 💓 Health Check
@@ -88,8 +92,8 @@ app.get('/health', (req, res) => res.status(200).send('✅ Bot is Running!'));
 // ✅ Webhook Verification
 // ==============================
 app.get('/webhook', (req, res) => {
-  const mode      = req.query['hub.mode'];
-  const token     = req.query['hub.verify_token'];
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     console.log('✅ Webhook verified!');
@@ -106,14 +110,95 @@ app.post('/webhook', (req, res) => {
   const body = req.body;
   if (body.object === 'page') {
     body.entry.forEach(entry => {
-      const event    = entry.messaging[0];
+      const event = entry.messaging[0];
       const senderId = event.sender.id;
-      if (event.message)  handleMessage(senderId, event.message);
+      if (event.message) handleMessage(senderId, event.message);
       if (event.postback) handlePostback(senderId, event.postback);
     });
     res.status(200).send('EVENT_RECEIVED');
   } else {
     res.sendStatus(404);
+  }
+});
+
+// ==============================
+// 🛒 ORDER WEBHOOK
+// Called by your Lovable website when user confirms their order.
+//
+// Expected POST body from Lovable:
+// {
+//   "psid": "123456789",          ← FB Page-Scoped User ID (passed in redirect URL)
+//   "customerName": "Ram Sharma",
+//   "items": [
+//     { "name": "Product A", "qty": 2, "price": 500 },
+//     { "name": "Product B", "qty": 1, "price": 300 }
+//   ],
+//   "total": 1300,
+//   "notes": "Optional note"       ← optional
+// }
+// ==============================
+app.post('/order-webhook', async (req, res) => {
+  try {
+    const { psid, customerName, items, total, notes } = req.body;
+
+    // Validate required fields
+    if (!psid || !items || !total) {
+      return res.status(400).json({ error: 'Missing required fields: psid, items, total' });
+    }
+
+    console.log(`\n🛒 New Order from PSID: ${psid}`);
+
+    // Build readable item list
+    const itemLines = items
+      .map(i => `  • ${i.name} x${i.qty || 1} — NRs.${i.price}`)
+      .join('\n');
+
+    const orderSummary =
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🛒 ORDER PREVIEW\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      (customerName ? `👤 Name: ${customerName}\n` : '') +
+      `\n📦 Items:\n${itemLines}\n` +
+      `\n💰 Total: NRs.${total}` +
+      (notes ? `\n📝 Notes: ${notes}` : '') +
+      `\n━━━━━━━━━━━━━━━━━━━━\n` +
+      `⏳ Please wait — our admin will confirm your order and share payment details shortly! 🙏\n\n` +
+      `— Online Service Nepal`;
+
+    // Save order in userState so admin can reference it
+    userState[psid] = {
+      waitingForAdminAccept: true,
+      orderSummary: orderSummary,
+      orderData: { customerName, items, total, notes }
+    };
+
+    // 1️⃣ Send order preview to customer in Messenger
+    await sendText(psid, orderSummary);
+
+    // 2️⃣ Notify admin with full details + accept command
+    const adminMsg =
+      `🔔 NEW ORDER RECEIVED!\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `👤 Customer PSID: ${psid}\n` +
+      (customerName ? `📛 Name: ${customerName}\n` : '') +
+      `\n📦 Items:\n${itemLines}\n` +
+      `💰 Total: NRs.${total}` +
+      (notes ? `\n📝 Notes: ${notes}` : '') +
+      `\n━━━━━━━━━━━━━━━━━━━━\n` +
+      `✅ To accept & send payment details:\n` +
+      `ACCEPT ${psid}\n\n` +
+      `❌ To reject order:\n` +
+      `REJECT ${psid}`;
+
+    await sendText(ADMIN_ID, adminMsg).catch(() =>
+      console.log('⚠️ Admin notify failed — check ADMIN_ID in .env')
+    );
+
+    res.status(200).json({ success: true, message: 'Order received and sent to Messenger' });
+
+  } catch (err) {
+    console.error('❌ Order webhook error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -137,7 +222,7 @@ function checkSession(senderId) {
 // ==============================
 function getGreeting() {
   const nepalHour = (new Date().getUTCHours() + 5) % 24;
-  if (nepalHour >= 5  && nepalHour < 12) return '🌅 Good Morning';
+  if (nepalHour >= 5 && nepalHour < 12) return '🌅 Good Morning';
   if (nepalHour >= 12 && nepalHour < 17) return '☀️ Good Afternoon';
   if (nepalHour >= 17 && nepalHour < 21) return '🌆 Good Evening';
   return '🌙 Good Night';
@@ -170,44 +255,44 @@ function matchText(input, options) {
 }
 
 const MAIN_MENU_KEYWORDS = {
-  '1': ['browse','service','product','buy','order','shop','purchase','google','apple','recharge','document','translate','spotify'],
-  '2': ['team','support','help','talk','agent','human','chat','connect','query','question','problem']
+  '1': ['browse', 'service', 'product', 'buy', 'order', 'shop', 'purchase', 'google', 'apple', 'recharge', 'document', 'translate', 'spotify'],
+  '2': ['team', 'support', 'help', 'talk', 'agent', 'human', 'chat', 'connect', 'query', 'question', 'problem']
 };
 
 const SERVICES_KEYWORDS = {
-  '3': ['google','play','gplay','inr','redeem'],
-  '4': ['apple','itunes','ios','iphone','ipad'],
-  '5': ['recharge','mobile','airtel','jio','vi','bsnl','sim','phone','data'],
-  '6': ['document','translate','translation','citizenship','nagarikta','land','tax','ward','educational'],
+  '3': ['google', 'play', 'gplay', 'inr', 'redeem'],
+  '4': ['apple', 'itunes', 'ios', 'iphone', 'ipad'],
+  '5': ['recharge', 'mobile', 'airtel', 'jio', 'vi', 'bsnl', 'sim', 'phone', 'data'],
+  '6': ['document', 'translate', 'translation', 'citizenship', 'nagarikta', 'land', 'tax', 'ward', 'educational'],
   '7': ['spotify']
 };
 
 const GOOGLE_PACK_KEYWORDS = {
-  '1': ['trial','test','try','check','small','first','10 inr','inr 10'],
-  '2': ['regular','main','full','big','large','normal']
+  '1': ['trial', 'test', 'try', 'check', 'small', 'first', '10 inr', 'inr 10'],
+  '2': ['regular', 'main', 'full', 'big', 'large', 'normal']
 };
 
 const OPERATOR_KEYWORDS = {
   '1': ['airtel'],
   '2': ['jio'],
-  '3': ['vi','vodafone','idea'],
+  '3': ['vi', 'vodafone', 'idea'],
   '4': ['bsnl']
 };
 
 const PAYMENT_KEYWORDS = {
-  '1': ['esewa','e-sewa','e sewa'],
+  '1': ['esewa', 'e-sewa', 'e sewa'],
   '2': ['khalti'],
-  '3': ['bank','transfer','deposit','account']
+  '3': ['bank', 'transfer', 'deposit', 'account']
 };
 
 const DOC_KEYWORDS = {
-  '1': ['citizenship','nagarikta','citizen'],
-  '2': ['education','educational','degree','certificate','school','college','academic'],
-  '3': ['land','jagga','owner','property owner'],
-  '4': ['tax clearance','tax clear'],
-  '5': ['property tax','property'],
-  '6': ['ward','office','verification','verify'],
-  '7': ['other','others','else','different','misc']
+  '1': ['citizenship', 'nagarikta', 'citizen'],
+  '2': ['education', 'educational', 'degree', 'certificate', 'school', 'college', 'academic'],
+  '3': ['land', 'jagga', 'owner', 'property owner'],
+  '4': ['tax clearance', 'tax clear'],
+  '5': ['property tax', 'property'],
+  '6': ['ward', 'office', 'verification', 'verify'],
+  '7': ['other', 'others', 'else', 'different', 'misc']
 };
 
 // ==============================
@@ -220,8 +305,8 @@ async function classifyIntent(userMessage) {
       contents: [{ parts: [{ text: INTENT_PROMPT + '\n\nCustomer: ' + userMessage }] }]
     });
     const intent = response.data.candidates[0].content.parts[0].text.trim().toUpperCase();
-    const valid  = ['GOOGLE_PRICE','APPLE_PRICE','SPOTIFY','KUKUFM','SERVICES','RECHARGE',
-                    'TRANSLATION','FAQ_DELIVERY','FAQ_NEPAL','FAQ_PAYMENT','OUT_OF_SCOPE'];
+    const valid = ['GOOGLE_PRICE', 'APPLE_PRICE', 'SPOTIFY', 'KUKUFM', 'SERVICES', 'RECHARGE',
+      'TRANSLATION', 'FAQ_DELIVERY', 'FAQ_NEPAL', 'FAQ_PAYMENT', 'OUT_OF_SCOPE'];
     const result = valid.includes(intent) ? intent : 'OUT_OF_SCOPE';
     console.log(`🤖 Intent: ${result}`);
     return result;
@@ -235,13 +320,13 @@ async function classifyIntent(userMessage) {
 // 🎯 Handle Intent
 // ==============================
 async function handleIntent(senderId, intent) {
-  switch(intent) {
-    case 'SERVICES':      return sendServicesMenu(senderId);
-    case 'GOOGLE_PRICE':  return sendGoogleMenuText(senderId);
-    case 'APPLE_PRICE':   return sendAppleMenuText(senderId);
-    case 'SPOTIFY':       return sendSpotifyMenu(senderId);
-    case 'RECHARGE':      return sendRechargeMenuText(senderId);
-    case 'TRANSLATION':   return sendTranslationMenuText(senderId);
+  switch (intent) {
+    case 'SERVICES': return sendServicesMenu(senderId);
+    case 'GOOGLE_PRICE': return sendGoogleMenuText(senderId);
+    case 'APPLE_PRICE': return sendAppleMenuText(senderId);
+    case 'SPOTIFY': return sendSpotifyMenu(senderId);
+    case 'RECHARGE': return sendRechargeMenuText(senderId);
+    case 'TRANSLATION': return sendTranslationMenuText(senderId);
     case 'FAQ_DELIVERY':
       return sendText(senderId,
         `⏱️ After payment confirmation from our end, it takes 10-15 minutes to complete your order!\n\nType MENU to browse our services 😊`
@@ -272,7 +357,7 @@ async function handleIntent(senderId, intent) {
 // 💬 Handle Messages
 // ==============================
 async function handleMessage(senderId, message) {
-  const text    = (message.text || '').toLowerCase().trim();
+  const text = (message.text || '').toLowerCase().trim();
   const rawText = (message.text || '').trim();
 
   console.log('👤 Sender:', senderId, '| Msg:', rawText);
@@ -288,8 +373,8 @@ async function handleMessage(senderId, message) {
 
   // ─── Payment screenshot confirmation ───
   if (userState[senderId] && userState[senderId].waitingForPaymentConfirm) {
-    const isYes = ['1','yes','yeah','yep','hoo','ho','ha','payment','confirm','haan','ya','y','ok','okay','sure'].includes(text);
-    const isNo  = ['2','no','nope','nahi','na','n','not'].includes(text);
+    const isYes = ['1', 'yes', 'yeah', 'yep', 'hoo', 'ho', 'ha', 'payment', 'confirm', 'haan', 'ya', 'y', 'ok', 'okay', 'sure'].includes(text);
+    const isNo = ['2', 'no', 'nope', 'nahi', 'na', 'n', 'not'].includes(text);
     if (isYes) {
       const lastOrder = userState[senderId].lastOrder || 'your order';
       userState[senderId] = { waitingForOrder: true, lastOrder };
@@ -305,14 +390,13 @@ async function handleMessage(senderId, message) {
       delete userState[senderId].waitingForPaymentConfirm;
       return sendText(senderId, `No problem! 😊\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬`);
     }
-    // ✅ Fix — If customer types something else, just clear and let flow naturally
     delete userState[senderId].waitingForPaymentConfirm;
-    // Fall through to normal message handling below
+    // Fall through to normal message handling
   }
 
   // ─── After payment — free follow up ───
   if (userState[senderId] && userState[senderId].waitingForOrder) {
-    if (['menu','hi','hello','start'].includes(text)) {
+    if (['menu', 'hi', 'hello', 'start'].includes(text)) {
       delete userState[senderId];
       return sendWelcome(senderId);
     }
@@ -320,19 +404,88 @@ async function handleMessage(senderId, message) {
     return;
   }
 
-  // ─── Admin COMPLETE command ───
-  if (senderId === ADMIN_ID && rawText.toUpperCase().startsWith('COMPLETE')) {
-    const parts        = rawText.split(' ');
-    const customerId   = parts[1];
-    const orderDetails = parts.slice(2).join(' ');
-    if (customerId && orderDetails) {
-      delete userState[customerId];
-      sendText(customerId,
-        `✅ Your Order is Completed!\n\n📦 ${orderDetails}\n\nThank you for choosing Online Service Nepal! 🙏\n\n⭐ Happy with our service? Leave us a review:\n👉 ${REVIEW_LINK}\n\nYour review helps us serve you better! 🇳🇵`
-      );
-      return sendText(ADMIN_ID, `✅ Order completed for: ${customerId}`);
+  // ─── Customer waiting for admin to accept their website order ───
+  if (userState[senderId] && userState[senderId].waitingForAdminAccept) {
+    if (['menu', 'hi', 'hello', 'start'].includes(text)) {
+      delete userState[senderId];
+      return sendWelcome(senderId);
     }
-    return sendText(ADMIN_ID, `⚠️ Format: COMPLETE [CustomerID] [OrderDetails]`);
+    // Let them know we got their message, order is still pending
+    return sendText(senderId,
+      `⏳ Your order is still being reviewed by our team!\n\nWe'll send you payment details very soon. 🙏\n\nType MENU to go back to the main menu.`
+    );
+  }
+
+  // ─── Admin Commands ───
+  if (senderId === ADMIN_ID) {
+
+    // COMPLETE command (existing)
+    if (rawText.toUpperCase().startsWith('COMPLETE')) {
+      const parts = rawText.split(' ');
+      const customerId = parts[1];
+      const orderDetails = parts.slice(2).join(' ');
+      if (customerId && orderDetails) {
+        delete userState[customerId];
+        sendText(customerId,
+          `✅ Your Order is Completed!\n\n📦 ${orderDetails}\n\nThank you for choosing Online Service Nepal! 🙏\n\n⭐ Happy with our service? Leave us a review:\n👉 ${REVIEW_LINK}\n\nYour review helps us serve you better! 🇳🇵`
+        );
+        return sendText(ADMIN_ID, `✅ Order completed for: ${customerId}`);
+      }
+      return sendText(ADMIN_ID, `⚠️ Format: COMPLETE [CustomerID] [OrderDetails]`);
+    }
+
+    // ACCEPT command (new — for website orders)
+    // Usage: ACCEPT [customerPSID]
+    if (rawText.toUpperCase().startsWith('ACCEPT')) {
+      const parts = rawText.split(' ');
+      const customerId = parts[1];
+      if (!customerId) {
+        return sendText(ADMIN_ID, `⚠️ Format: ACCEPT [CustomerPSID]`);
+      }
+      const customerOrder = userState[customerId];
+      if (!customerOrder || !customerOrder.waitingForAdminAccept) {
+        return sendText(ADMIN_ID, `⚠️ No pending website order found for PSID: ${customerId}`);
+      }
+      // Move customer to waitingForPayment stage
+      const { orderData } = customerOrder;
+      const orderSummaryShort =
+        `Website Order — NRs.${orderData.total}` +
+        (orderData.customerName ? ` (${orderData.customerName})` : '');
+
+      userState[customerId] = {
+        waitingForPayment: true,
+        lastOrder: orderSummaryShort,
+        orderSummary: `🛒 Website Order\n💰 Total: NRs.${orderData.total}`
+      };
+
+      // Tell customer to choose payment
+      await sendText(customerId,
+        `✅ Great news! Your order has been accepted!\n\n` +
+        `💰 Total: NRs.${orderData.total}\n\n` +
+        `Please select your payment method:\n\n` +
+        `1️⃣  eSewa\n2️⃣  Khalti\n3️⃣  Bank Transfer\n\n` +
+        `0️⃣  Cancel Order`
+      );
+
+      return sendText(ADMIN_ID, `✅ Order accepted for PSID: ${customerId}. Customer is now choosing payment.`);
+    }
+
+    // REJECT command (new — for website orders)
+    // Usage: REJECT [customerPSID]
+    if (rawText.toUpperCase().startsWith('REJECT')) {
+      const parts = rawText.split(' ');
+      const customerId = parts[1];
+      if (!customerId) {
+        return sendText(ADMIN_ID, `⚠️ Format: REJECT [CustomerPSID]`);
+      }
+      delete userState[customerId];
+      await sendText(customerId,
+        `❌ Sorry, we were unable to process your order at this time.\n\n` +
+        `Please contact our support team or try again.\n\n` +
+        `Type MENU to browse our services. 🙏`
+      );
+      return sendText(ADMIN_ID, `✅ Order rejected for PSID: ${customerId}. Customer notified.`);
+    }
   }
 
   // ─── Session timeout ───
@@ -344,7 +497,7 @@ async function handleMessage(senderId, message) {
   }
 
   // ─── ALWAYS handle MENU/HI first ───
-  if (['hi','hello','namaste','hey','start','menu'].includes(text)) {
+  if (['hi', 'hello', 'namaste', 'hey', 'start', 'menu'].includes(text)) {
     return sendWelcome(senderId);
   }
 
@@ -386,10 +539,10 @@ async function handleMessage(senderId, message) {
   // ─── Google Pack ───
   if (userState[senderId] && userState[senderId].waitingForGooglePack) {
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
-    if (['apple','itunes','ios','iphone','ipad'].some(w => text.includes(w))) {
+    if (['apple', 'itunes', 'ios', 'iphone', 'ipad'].some(w => text.includes(w))) {
       delete userState[senderId]; return sendAppleMenuText(senderId);
     }
-    if (['gift card','service','product','other','else'].some(w => text.includes(w))) {
+    if (['gift card', 'service', 'product', 'other', 'else'].some(w => text.includes(w))) {
       delete userState[senderId]; return sendServicesMenu(senderId);
     }
     const gPack = matchText(rawText, GOOGLE_PACK_KEYWORDS) || text;
@@ -401,7 +554,7 @@ async function handleMessage(senderId, message) {
   // ─── Google Trial ───
   if (userState[senderId] && userState[senderId].waitingForGoogleTrial) {
     if (text === '0') { delete userState[senderId]; return sendGoogleMenuText(senderId); }
-    const isYesTrial = ['1','yes','proceed','buy','order','ok','okay','sure'].includes(text);
+    const isYesTrial = ['1', 'yes', 'proceed', 'buy', 'order', 'ok', 'okay', 'sure'].includes(text);
     if (isYesTrial) {
       userState[senderId] = {
         waitingForPayment: true,
@@ -439,7 +592,7 @@ async function handleMessage(senderId, message) {
   // ─── Apple ───
   if (userState[senderId] && userState[senderId].waitingForApple) {
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
-    if (['google','play','gplay'].some(w => text.includes(w))) {
+    if (['google', 'play', 'gplay'].some(w => text.includes(w))) {
       delete userState[senderId]; return sendGoogleMenuText(senderId);
     }
     const match = matchPrice(rawText, APPLE_PRICES);
@@ -455,7 +608,7 @@ async function handleMessage(senderId, message) {
       `❓ Please type the number to select:\n\n` +
       `1️⃣  100 INR = NRs.185\n2️⃣  150 INR = NRs.275\n3️⃣  200 INR = NRs.365\n` +
       `4️⃣  250 INR = NRs.455\n5️⃣  300 INR = NRs.545\n6️⃣  500 INR = NRs.885\n7️⃣  1000 INR = NRs.1720\n\n` +
-      `💡 Just type 1, 2, 3... to continue!\n\n0️⃣  Back`
+      `💡 Just type 1, 2, 3... to continue!\n\n0️⃣  Back to Services`
     );
   }
 
@@ -478,7 +631,7 @@ async function handleMessage(senderId, message) {
 
   // ─── Operator ───
   if (userState[senderId] && userState[senderId].waitingForOperator) {
-    const operators = {'1':'Airtel','2':'Jio','3':'Vi','4':'BSNL'};
+    const operators = { '1': 'Airtel', '2': 'Jio', '3': 'Vi', '4': 'BSNL' };
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
     const opKey = matchText(rawText, OPERATOR_KEYWORDS) || text;
     const operator = operators[opKey];
@@ -493,9 +646,9 @@ async function handleMessage(senderId, message) {
   // ─── Document ───
   if (userState[senderId] && userState[senderId].waitingForDoc) {
     const docs = {
-      '1':'Citizenship','2':'Educational Documents','3':'Land Owner Certificate',
-      '4':'Tax Clearance','5':'Property Tax Receipt',
-      '6':'Verification From Ward Office','7':'Others'
+      '1': 'Citizenship', '2': 'Educational Documents', '3': 'Land Owner Certificate',
+      '4': 'Tax Clearance', '5': 'Property Tax Receipt',
+      '6': 'Verification From Ward Office', '7': 'Others'
     };
     if (text === '0') { delete userState[senderId]; return sendServicesMenu(senderId); }
     const docKey = matchText(rawText, DOC_KEYWORDS) || text;
@@ -546,23 +699,23 @@ async function handleMessage(senderId, message) {
 function handlePostback(senderId) { sendWelcome(senderId); }
 
 // ==============================
-// 👋 Welcome
+// 👋 Welcome  ← NOW SHOWS ORDER OPTION
 // ==============================
 function sendWelcome(senderId) {
-  const greeting    = getGreeting();
+  const greeting = getGreeting();
   const isReturning = knownUsers[senderId];
   knownUsers[senderId] = true;
-  userState[senderId]  = {};
+  userState[senderId] = {};
   sendText(senderId,
     isReturning
-      ? `👋 Welcome Back!\n${greeting}! Great to see you again! 🙏\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2 to continue...`
-      : `🙏 ${greeting}!\nWelcome to Online Service Nepal! 🇳🇵\n\nWe provide fast & reliable digital services.\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2 to continue...`
+      ? `👋 Welcome Back!\n${greeting}! Great to see you again! 🙏\n\n1️⃣  Place an Order 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2 to continue...`
+      : `🙏 ${greeting}!\nWelcome to Online Service Nepal! 🇳🇵\n\nWe provide fast & reliable digital services.\n\n1️⃣  Place an Order 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2 to continue...`
   );
 }
 
 function sendMainMenu(senderId) {
   userState[senderId] = {};
-  sendText(senderId, `How can we help you today?\n\n1️⃣  Browse Services 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2...`);
+  sendText(senderId, `How can we help you today?\n\n1️⃣  Place an Order 🛒\n2️⃣  Talk to Our Team 💬\n\nType 1 or 2...`);
 }
 
 function sendSupportMenu(senderId) {
@@ -572,10 +725,15 @@ function sendSupportMenu(senderId) {
   );
 }
 
+// ─── Updated: Option 1 now redirects to website ───
 function sendServicesMenu(senderId) {
   userState[senderId] = { inServices: true };
+  const shopUrl = `${WEBSITE_URL}?psid=${senderId}`;
   sendText(senderId,
-    `🛒 Our Services\n\n` +
+    `🛒 Ready to order?\n\n` +
+    `👉 Visit our shop here:\n${shopUrl}\n\n` +
+    `Browse products, add to cart, and click Continue — your order preview will appear right here in this chat!\n\n` +
+    `Or choose from our digital services:\n\n` +
     `3️⃣  Google INR Redeem Code 🎮\n` +
     `4️⃣  Apple iTunes Redeem Code 🍎\n` +
     `5️⃣  Indian Mobile Recharge 📱\n` +
